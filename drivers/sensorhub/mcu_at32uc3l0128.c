@@ -12,20 +12,20 @@
  *  GNU General Public License for more details.
  *
  */
-#include "../ssp.h"
+#include "ssp.h"
 
 /*************************************************************************/
 /* factory Sysfs                                                         */
 /*************************************************************************/
 
-#define MODEL_NAME			"ATUC128L5HAR"
+#define MODEL_NAME			"AT32UC3L0128"
 
 ssize_t mcu_revision_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	struct ssp_data *data = dev_get_drvdata(dev);
 
-	return sprintf(buf, "AT01%u,AT01%u\n", data->uCurFirmRev,
+	return sprintf(buf, "AT01120%u,AT01120%u\n", data->uCurFirmRev,
 		get_module_rev(data));
 }
 
@@ -214,7 +214,6 @@ ssize_t mcu_sleep_factorytest_show(struct device *dev,
 
 	for (iDataIdx = 0; iDataIdx < FACTORY_DATA_MAX;) {
 		iSensorData = (int)data->uFactorydata[iDataIdx++];
-
 		if ((iSensorData < 0) ||
 			(iSensorData >= (SENSOR_MAX - 1))) {
 			pr_err("[SSP]: %s - Mcu data frame error %d\n",
@@ -230,38 +229,9 @@ ssize_t mcu_sleep_factorytest_show(struct device *dev,
 	convert_acc_data(&fsb[ACCELEROMETER_SENSOR].y);
 	convert_acc_data(&fsb[ACCELEROMETER_SENSOR].z);
 
-	fsb[ACCELEROMETER_SENSOR].x -= data->accelcal.x;
-	fsb[ACCELEROMETER_SENSOR].y -= data->accelcal.y;
-	fsb[ACCELEROMETER_SENSOR].z -= data->accelcal.z;
-
-	fsb[GYROSCOPE_SENSOR].x -= data->gyrocal.x;
-	fsb[GYROSCOPE_SENSOR].y -= data->gyrocal.y;
-	fsb[GYROSCOPE_SENSOR].z -= data->gyrocal.z;
-
-	fsb[PRESSURE_SENSOR].pressure[0] -= data->iPressureCal;
-
 exit:
-	ssp_dbg("[SSP]: %s Result\naccel %d,%d,%d\n"\
-		"gyro %d,%d,%d\nmag %d,%d,%d\n"\
-		"baro %d,%d\nges %d,%d,%d,%d\n"\
-		"prox %u,%u\ntemp %d,%d\n"\
-		"light %u,%u,%u,%u\n", __func__,
-		fsb[ACCELEROMETER_SENSOR].x, fsb[ACCELEROMETER_SENSOR].y,
-		fsb[ACCELEROMETER_SENSOR].z, fsb[GYROSCOPE_SENSOR].x,
-		fsb[GYROSCOPE_SENSOR].y, fsb[GYROSCOPE_SENSOR].z,
-		fsb[GEOMAGNETIC_SENSOR].x, fsb[GEOMAGNETIC_SENSOR].y,
-		fsb[GEOMAGNETIC_SENSOR].z, fsb[PRESSURE_SENSOR].pressure[0],
-		fsb[PRESSURE_SENSOR].pressure[1],
-		fsb[GESTURE_SENSOR].data[0], fsb[GESTURE_SENSOR].data[1],
-		fsb[GESTURE_SENSOR].data[2], fsb[GESTURE_SENSOR].data[3],
-		fsb[PROXIMITY_SENSOR].prox[0], fsb[PROXIMITY_SENSOR].prox[1],
-		fsb[TEMPERATURE_HUMIDITY_SENSOR].data[0],
-		fsb[TEMPERATURE_HUMIDITY_SENSOR].data[1],
-		fsb[LIGHT_SENSOR].r, fsb[LIGHT_SENSOR].g, fsb[LIGHT_SENSOR].b,
-		fsb[LIGHT_SENSOR].w);
-
-	return sprintf(buf, "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%u,%u,%u,%u,%u"\
-		",%d,%d,%d,%d,%d,%d\n",
+	ssp_dbg("[SSP]: %s Result - "\
+		"%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%u,%u,%u,%u,%u\n", __func__,
 		fsb[ACCELEROMETER_SENSOR].x, fsb[ACCELEROMETER_SENSOR].y,
 		fsb[ACCELEROMETER_SENSOR].z, fsb[GYROSCOPE_SENSOR].x,
 		fsb[GYROSCOPE_SENSOR].y, fsb[GYROSCOPE_SENSOR].z,
@@ -269,8 +239,15 @@ exit:
 		fsb[GEOMAGNETIC_SENSOR].z, fsb[PRESSURE_SENSOR].pressure[0],
 		fsb[PRESSURE_SENSOR].pressure[1], fsb[PROXIMITY_SENSOR].prox[1],
 		fsb[LIGHT_SENSOR].r, fsb[LIGHT_SENSOR].g, fsb[LIGHT_SENSOR].b,
-		fsb[LIGHT_SENSOR].w, fsb[GESTURE_SENSOR].data[0], fsb[GESTURE_SENSOR].data[1],
-		fsb[GESTURE_SENSOR].data[2], fsb[GESTURE_SENSOR].data[3],
-		fsb[TEMPERATURE_HUMIDITY_SENSOR].data[0],
-		fsb[TEMPERATURE_HUMIDITY_SENSOR].data[1]);
+		fsb[LIGHT_SENSOR].w);
+
+	return sprintf(buf, "%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%u,%u,%u,%u,%u\n",
+		fsb[ACCELEROMETER_SENSOR].x, fsb[ACCELEROMETER_SENSOR].y,
+		fsb[ACCELEROMETER_SENSOR].z, fsb[GYROSCOPE_SENSOR].x,
+		fsb[GYROSCOPE_SENSOR].y, fsb[GYROSCOPE_SENSOR].z,
+		fsb[GEOMAGNETIC_SENSOR].x, fsb[GEOMAGNETIC_SENSOR].y,
+		fsb[GEOMAGNETIC_SENSOR].z, fsb[PRESSURE_SENSOR].pressure[0],
+		fsb[PRESSURE_SENSOR].pressure[1], fsb[PROXIMITY_SENSOR].prox[1],
+		fsb[LIGHT_SENSOR].r, fsb[LIGHT_SENSOR].g, fsb[LIGHT_SENSOR].b,
+		fsb[LIGHT_SENSOR].w);
 }
