@@ -148,7 +148,7 @@ fw-shipped-$(CONFIG_EPEN_WACOM_G9PLL) += epen/W9007_B804.bin epen/W9007_B878.bin
 
 fw-shipped-$(CONFIG_SENSORS_SSP) += ssp.fw
 fw-shipped-$(CONFIG_SENSORS_SSP) += ssp_crashed.fw
-TSPFIRMWARE_DIRECTORY = firmware/tsp_atmel
+TSPFIRMWARE_DIRECTORY = $(srctree)/firmware/tsp_atmel
 ifeq ($(shell test -d $(TSPFIRMWARE_DIRECTORY) && echo yes),yes)
 fw-shipped-$(CONFIG_TOUCHSCREEN_ATMEL_MXT540E) += tsp_atmel/mXT540E.fw
 fw-shipped-$(CONFIG_TOUCHSCREEN_ATMEL_MXT540S) += tsp_atmel/mXT540Sg.fw tsp_atmel/mXT540Si.fw
@@ -158,7 +158,7 @@ else
 $(warning '$(TSPFIRMWARE_DIRECTORY)' directory dose not exist)
 endif
 
-TSPFIRMWARE_DIRECTORY = firmware/tsp_synaptics
+TSPFIRMWARE_DIRECTORY = $(srctree)/firmware/tsp_synaptics
 ifeq ($(shell test -d $(TSPFIRMWARE_DIRECTORY) && echo yes),yes)
 fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_RMI) += tsp_synaptics/synaptics_b0_h.fw \
 	tsp_synaptics/synaptics_b0_5_1.fw \
