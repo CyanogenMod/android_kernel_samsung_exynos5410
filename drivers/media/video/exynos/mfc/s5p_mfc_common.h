@@ -807,8 +807,8 @@ struct s5p_mfc_fmt {
 };
 
 int get_framerate(struct timeval *to, struct timeval *from);
-inline int clear_hw_bit(struct s5p_mfc_ctx *ctx);
-inline int s5p_mfc_get_new_ctx(struct s5p_mfc_dev *dev);
+int clear_hw_bit(struct s5p_mfc_ctx *ctx);
+int s5p_mfc_get_new_ctx(struct s5p_mfc_dev *dev);
 
 #ifdef CONFIG_ION_EXYNOS
 extern struct ion_device *ion_exynos;
