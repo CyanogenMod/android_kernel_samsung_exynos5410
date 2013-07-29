@@ -140,7 +140,7 @@ struct s3cfb_extdsp_user_window {
 #define S3CFB_EXTDSP_UNMAP_FD			_IOW('F', 330, unsigned int)
 
 extern struct fb_ops s3cfb_extdsp_ops;
-extern inline struct s3cfb_extdsp_global *get_extdsp_global(int id);
+extern struct s3cfb_extdsp_global *get_extdsp_global(int id);
 
 /* S3CFB_EXTDSP */
 extern int s3cfb_extdsp_enable_window(struct s3cfb_extdsp_global *fbdev, int id);

@@ -756,7 +756,7 @@ struct s5p_mfc_fmt {
 };
 
 int get_framerate(struct timeval *to, struct timeval *from);
-inline int clear_hw_bit(struct s5p_mfc_ctx *ctx);
+int clear_hw_bit(struct s5p_mfc_ctx *ctx);
 
 #if defined(CONFIG_EXYNOS_MFC_V5)
 #include "regs-mfc-v5.h"
