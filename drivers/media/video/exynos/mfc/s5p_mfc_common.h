@@ -742,6 +742,8 @@ static inline unsigned int mfc_version(struct s5p_mfc_dev *dev)
 					(dev->fw.date >= 0x121214))
 #define FW_HAS_ADV_RC_MODE(dev)		(IS_MFCV6(dev) &&		\
 					(dev->fw.date >= 0x130329))
+#define FW_HAS_POC_TYPE_CTRL(dev)	(IS_MFCV6(dev) &&		\
+					(dev->fw.date >= 0x130405))
 
 #define HW_LOCK_CLEAR_MASK		(0xFFFFFFFF)
 
@@ -754,7 +756,7 @@ struct s5p_mfc_fmt {
 };
 
 int get_framerate(struct timeval *to, struct timeval *from);
-inline int clear_hw_bit(struct s5p_mfc_ctx *ctx);
+int clear_hw_bit(struct s5p_mfc_ctx *ctx);
 
 #if defined(CONFIG_EXYNOS_MFC_V5)
 #include "regs-mfc-v5.h"
