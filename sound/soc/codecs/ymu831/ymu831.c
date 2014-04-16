@@ -5436,6 +5436,8 @@ static void auto_powerdown(
 		0,
 	};
 
+	printk("Start_auto_powerdown\n");
+
 	get_mixer_path_ctl_info(codec, &mixer_ctl_info);
 	if ((mixer_ctl_info.audio_mode_play == 0)
 	&& (mixer_ctl_info.audio_mode_cap == 0)
@@ -5447,6 +5449,8 @@ static void auto_powerdown(
 	&& (mixer_ctl_info.lin1_play == 0)
 	&& (mixer_ctl_info.dtmf_control == 0))
 		_McDrv_Ctrl(MCDRV_SET_DSP, bAEC, NULL, sizeof(bAEC));
+
+	printk("End_auto_powerdown\n");
 #endif
 }
 

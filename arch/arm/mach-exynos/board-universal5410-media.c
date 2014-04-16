@@ -1404,6 +1404,23 @@ static void tdmb_gpio_off(void)
 	usleep_range(1000, 1000);
 	gpio_set_value(GPIO_TDMB_EN, GPIO_LEVEL_LOW);
 }
+#if defined(CONFIG_TDMB_ANT_DET)
+static void tdmb_ant_enable(bool en)
+{
+	unsigned int tdmb_ant_det_gpio;
+
+	printk(KERN_DEBUG "tdmb_ant_enable : %d\n", en);
+
+	if (en) {
+		s3c_gpio_cfgpin(GPIO_TDMB_ANT_DET, S3C_GPIO_SFN(0xf));
+		s3c_gpio_setpull(GPIO_TDMB_ANT_DET, S3C_GPIO_PULL_NONE);
+	} else {
+		s3c_gpio_cfgpin(GPIO_TDMB_ANT_DET, S3C_GPIO_INPUT);
+		s3c_gpio_setpull(GPIO_TDMB_ANT_DET, S3C_GPIO_PULL_NONE);
+	}
+}
+#endif
+
 
 static struct tdmb_platform_data tdmb_pdata = {
 	.gpio_on = tdmb_gpio_on,
@@ -1412,6 +1429,10 @@ static struct tdmb_platform_data tdmb_pdata = {
 	.cs_base = TDMB_EBI_CS_BASE,
 	.mem_size = TDMB_EBI_MEM_SIZE,
 #endif
+#if defined(CONFIG_TDMB_ANT_DET)
+	.tdmb_ant_det_en = tdmb_ant_enable,
+#endif
+
 };
 
 static struct platform_device tdmb_device = {
@@ -1482,7 +1503,7 @@ static int __init tdmb_dev_init(void)
 	tdmb_ant_det_gpio = GPIO_TDMB_ANT_DET;
 	tdmb_ant_det_irq = GPIO_TDMB_IRQ_ANT_DET;
 	
-	s3c_gpio_cfgpin(tdmb_ant_det_gpio, S3C_GPIO_SFN(0xf));
+	s3c_gpio_cfgpin(tdmb_ant_det_gpio, S3C_GPIO_INPUT);
 	s3c_gpio_setpull(tdmb_ant_det_gpio, S3C_GPIO_PULL_NONE);
 	tdmb_pdata.gpio_ant_det = tdmb_ant_det_gpio;
 	tdmb_pdata.irq_ant_det = tdmb_ant_det_irq;

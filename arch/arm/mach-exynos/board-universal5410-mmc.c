@@ -568,6 +568,9 @@ static struct dw_mci_board universal5410_dwmci2_pdata __initdata = {
 	.tuning_drv_st		= exynos_dwmci_tuning_drv_st,
 	.sdr_timing		= 0x03040000,
 	.ddr_timing		= 0x03020000,
+#if defined(CONFIG_MACH_J_CHN_CTC)
+	.sw_timeout         = 5000,
+#endif
 	.get_cd			= exynos_dwmci2_get_cd,
 	.cd_type		= DW_MCI_CD_GPIO,
 	.init			= exynos_dwmci2_init,

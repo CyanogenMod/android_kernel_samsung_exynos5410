@@ -48,6 +48,10 @@
 
 #include "mach/sec_debug.h"
 
+#ifdef CONFIG_SEC_GPIO_DVS
+#include <linux/secgpio_dvs.h>
+#endif
+
 extern phys_addr_t bootloaderfb_start;
 extern phys_addr_t bootloaderfb_size;
 
@@ -626,6 +630,14 @@ static void __init universal5410_machine_init(void)
 	exynos5_universal5410_input_init();
 	exynos5_universal5410_audio_init();
 	exynos5_universal5410_power_init();
+#ifdef CONFIG_SEC_GPIO_DVS
+	/************************ Caution !!! ****************************/
+	/* This function must be located in appropriate INIT position
+	 * in accordance with the specification of each BB vendor.
+	 */
+	/************************ Caution !!! ****************************/
+	gpio_dvs_check_initgpio();
+#endif	
 	exynos5_universal5410_media_init();
 #if !defined(CONFIG_MACH_V1)	
 	exynos5_universal5410_led_init();

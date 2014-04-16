@@ -1715,7 +1715,7 @@ static void sii8240_setup_charging(struct sii8240_data *sii8240)
 	u8	devType, pow, plim, value;
 	u8	*peer_devcap = sii8240->regs.peer_devcap;
 
-	if ((peer_devcap[MHL_DEVCAP_MHL_VERSION] & 0xF0) == 0x20) {
+	if ((peer_devcap[MHL_DEVCAP_MHL_VERSION] & 0xF0) >= 0x20) {
 		value = peer_devcap[MHL_DEVCAP_DEV_CAT];
 
 		devType = MHL_FLD_GET(value, 3, 0);
@@ -2421,7 +2421,7 @@ static void sii8240_avi_control_thread(struct work_struct *work)
 			goto exit;
 		}
 
-		if ((sii8240->regs.peer_devcap[MHL_DEVCAP_MHL_VERSION] == 0x20)
+		if ((sii8240->regs.peer_devcap[MHL_DEVCAP_MHL_VERSION] >= 0x20)
 		 && (sii8240->regs.peer_devcap[MHL_DEVCAP_VID_LINK_MODE] &
 					 (MHL_DEV_VID_LINK_SUPP_PPIXEL |
 					MHL_DEV_VID_LINK_SUPPYCBCR422)) &&
@@ -2539,7 +2539,7 @@ static void sii8240_avi_control_thread(struct work_struct *work)
 		}
 
 		if ((sii8240->regs.peer_devcap[MHL_DEVCAP_MHL_VERSION]
-						& 0x20) &&
+						>= 0x20) &&
 		(sii8240->regs.peer_devcap[MHL_DEVCAP_VID_LINK_MODE] &
 				 MHL_DEV_VID_LINK_SUPP_PPIXEL) &&
 		(sii8240->regs.peer_devcap[MHL_DEVCAP_VID_LINK_MODE] &

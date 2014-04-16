@@ -3469,6 +3469,7 @@ static int synaptics_rmi4_reset_device(struct synaptics_rmi4_data *rmi4_data)
 		rmi4_data->board->power(false);
 		msleep(30);
 		rmi4_data->board->power(true);
+		rmi4_data->current_page = MASK_8BIT;
 
 		msleep(SYNAPTICS_HW_RESET_TIME);
 
@@ -4031,6 +4032,7 @@ static int synaptics_rmi4_start_device(struct synaptics_rmi4_data *rmi4_data)
 	}
 
 	platform_data->power(true);
+	rmi4_data->current_page = MASK_8BIT;
 	rmi4_data->touch_stopped = false;
 
 	if (platform_data->enable_sync)

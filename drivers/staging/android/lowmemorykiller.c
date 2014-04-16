@@ -946,10 +946,13 @@ static int do_compcache(void * nothing)
 		if (kthread_should_stop())
 			break;
 
-		if (rtcc_reclaim_pages(number_of_reclaim_pages) < minimum_reclaim_pages)
-			cancel_soft_reclaim();
+		if (atomic_read(&s_reclaim.kcompcached_running) == 1) {
+			if (rtcc_reclaim_pages(number_of_reclaim_pages) < minimum_reclaim_pages)
+				cancel_soft_reclaim();
 
-		atomic_set(&s_reclaim.kcompcached_running, 0);
+			atomic_set(&s_reclaim.kcompcached_running, 0);
+		}
+
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule();
 	}

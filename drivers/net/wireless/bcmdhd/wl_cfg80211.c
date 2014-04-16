@@ -720,11 +720,11 @@ static void wl_add_remove_pm_enable_work(struct wl_priv *wl, bool add_remove,
 				case WL_HANDLER_DEL:
 				default:
 			wl->pm_enable_work_on = false;
-					break;
-			}
 #ifdef CUSTOMER_HW4
 			DHD_OS_WAKE_UNLOCK(wl->pub);
 #endif /* CUSTOMER_HW4 */
+			break;
+			}
 		}
 	}
 }
@@ -3330,6 +3330,7 @@ wl_cfg80211_connect(struct wiphy *wiphy, struct net_device *dev,
 	size_t join_params_size;
 #if defined(ROAM_ENABLE) && defined(ROAM_AP_ENV_DETECTION)
 	dhd_pub_t *dhd =  (dhd_pub_t *)(wl->pub);
+	s32 roam_trigger[2] = {0, 0};
 #endif /* ROAM_AP_ENV_DETECTION */
 	s32 err = 0;
 	wpa_ie_fixed_t *wpa_ie;
@@ -3465,13 +3466,26 @@ wl_cfg80211_connect(struct wiphy *wiphy, struct net_device *dev,
 		}
 	}
 #if defined(ROAM_ENABLE) && defined(ROAM_AP_ENV_DETECTION)
-	if (dhd->roam_env_detection && (wldev_iovar_setint(dev, "roam_env_detection",
-		AP_ENV_DETECT_NOT_USED) == BCME_OK)) {
-		s32 roam_trigger[2] = {WL_AUTO_ROAM_TRIGGER, WLC_BAND_ALL};
-		err = wldev_ioctl(dev, WLC_SET_ROAM_TRIGGER, roam_trigger,
-			sizeof(roam_trigger), true);
-		if (unlikely(err)) {
-			WL_ERR((" failed to restore roam_trigger for auto env detection\n"));
+	if (dhd->roam_env_detection) {
+		bool is_auto_roam_trigger = TRUE;
+		bool is_roam_env_ok = (wldev_iovar_setint(dev, "roam_env_detection",
+				AP_ENV_DETECT_NOT_USED) == BCME_OK);
+#ifdef CUSTOMER_HW4
+		roam_trigger[1] = WLC_BAND_2G;
+		is_auto_roam_trigger =
+			(wldev_ioctl(dev, WLC_GET_ROAM_TRIGGER, roam_trigger,
+			sizeof(roam_trigger), 0) == BCME_OK) &&
+			(roam_trigger[0] == WL_AUTO_ROAM_TRIGGER-10);
+#endif /* CUSTOMER_HW4 */
+		if (is_auto_roam_trigger && is_roam_env_ok) {
+			roam_trigger[0] = WL_AUTO_ROAM_TRIGGER;
+			roam_trigger[1] = WLC_BAND_ALL;
+			err = wldev_ioctl(dev, WLC_SET_ROAM_TRIGGER, roam_trigger,
+				sizeof(roam_trigger), true);
+			if (unlikely(err)) {
+				WL_ERR((" failed to restore roam_trigger for auto env"
+					" detection\n"));
+			}
 		}
 	}
 #endif /* ROAM_AP_ENV_DETECTION */
@@ -4936,20 +4950,28 @@ wl_cfg80211_check_DFS_channel(struct wl_priv *wl, wl_af_params_t *af_params,
 	struct wl_bss_info *bi = NULL;
 	bool result = false;
 	s32 i;
-	chanspec_t chanspec;
 
 	/* If DFS channel is 52~148, check to block it or not */
 	if (af_params &&
 		(af_params->channel >= 52 && af_params->channel <= 148)) {
+
+		WL_DBG(("channel=%d", af_params->channel ));
+
 		if (!wl_cfgp2p_is_p2p_action(frame, frame_len)) {
 			bss_list = wl->bss_list;
 			bi = next_bss(bss_list, bi);
 			for_each_bss(bss_list, bi, i) {
+
+				WL_DBG(("BSSID1=" MACDBG ", BSSID2=" MACDBG "\n",
+					MAC2STRDBG((char *)&af_params->BSSID), MAC2STRDBG((char *)&bi->BSSID)));
+
+				WL_DBG(("CTL channel=%d, chanspec channel=%d, chanspec=%d\n",
+					bi->ctl_ch, CHSPEC_CHANNEL(bi->chanspec), bi->chanspec));
+
 				if (memcmp((char *)&bi->BSSID,
 					(char *)&af_params->BSSID, ETHER_ADDR_LEN) == 0) {
-					chanspec = bi->chanspec;
-					if (CHSPEC_IS5G(chanspec) &&
-						CHSPEC_CHANNEL(chanspec) == af_params->channel) {
+					if (CHSPEC_IS5G(bi->chanspec) &&
+						(bi->ctl_ch ? bi->ctl_ch : CHSPEC_CHANNEL(bi->chanspec)) == af_params->channel) {
 						result = true;	/* do not block the action frame */
 						break;
 					}
@@ -4964,6 +4986,8 @@ wl_cfg80211_check_DFS_channel(struct wl_priv *wl, wl_af_params_t *af_params,
 	WL_DBG(("result=%s", result?"true":"false"));
 	return result;
 }
+
+
 
 
 static bool
@@ -9652,6 +9676,9 @@ static s32 wl_notifier_change_state(struct wl_priv *wl, struct net_info *_net_in
 					else
 						WL_ERR(("%s:error (%d)\n", iter->ndev->name, err));
 				}
+			}
+			if (wl->pm_enable_work_on) {
+				wl_add_remove_pm_enable_work(wl, FALSE, WL_HANDLER_DEL);
 			}
 			wl->pm_enable_work_on = true;
 			wl_add_remove_pm_enable_work(wl, TRUE, WL_HANDLER_NOTUSE);

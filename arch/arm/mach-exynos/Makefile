@@ -129,6 +129,9 @@ obj-$(CONFIG_MACH_JA)	+= board-universal5410-gpio.o
 obj-$(CONFIG_MACH_V1)	+= board-v1-gpio.o
 endif
 endif
+ifeq ($(CONFIG_MACH_UNIVERSAL5410),y)
+obj-$(CONFIG_SEC_GPIO_DVS)		+= board-universal5410-gpiodvs.o
+endif
 ifeq ($(CONFIG_MACH_V1),y)
 obj-$(CONFIG_BATTERY_SAMSUNG)		+= board-vienna-battery.o
 else
