@@ -1154,7 +1154,11 @@ static int __init exynos_cpufreq_init(void)
 	}
 
 	pm_qos_add_request(&boot_cpu_qos, PM_QOS_CPU_FREQ_MIN, 0);
+#ifdef CONFIG_TARGET_LOCALE_KOR
+	pm_qos_update_request_timeout(&boot_cpu_qos, 1200000, 40000 * 1000);
+#else
 	pm_qos_update_request_timeout(&boot_cpu_qos, 800000, 40000 * 1000);
+#endif
 
 	exynos_cpufreq_init_done = true;
 

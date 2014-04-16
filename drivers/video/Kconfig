@@ -25,6 +25,7 @@ source "drivers/gpu/stub/Kconfig"
 
 source "drivers/gpu/ion/Kconfig"
 
+source "drivers/gpu/arm/Kconfig"
 
 source "drivers/gpu/pvr/Kconfig"
 
@@ -2064,6 +2065,11 @@ config FB_MIPI_DSIM
 	default n
 	---help---
 	  This enables support for Samsung MIPI DSIM feature
+
+config FB_MIPI_DSIM_DBG
+	bool "Support MIPI DSIM_DEBUG"
+	depends on FB_MIPI_DSIM
+	default n
 
 config FB_I80_COMMAND_MODE
 	bool "Samsung MIPI DSI command mode"

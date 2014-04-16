@@ -1,5 +1,5 @@
 /*
-   Obfuscated by COBF (Version 1.06 2006-01-07 by BB) at Mon Jun 10 09:48:00 2013
+   Obfuscated by COBF (Version 1.06 2006-01-07 by BB) at Wed Dec 18 14:11:10 2013
 */
 #define bba typedef
 #define bbs unsigned
@@ -8,18 +8,18 @@
 #define bb135 short
 #define bbh const
 #define bb308 DEVL
-#define bb117 __KERNEL__
-#define bb284 float
+#define bb113 __KERNEL__
+#define bb271 float
 #define bb6 long
-#define bb290 int8_t
-#define bb208 int16_t
-#define bb271 int32_t
+#define bb289 int8_t
+#define bb209 int16_t
+#define bb270 int32_t
 #define bb115 int64_t
 #define bb226 __linux
-#define bb235 u_int8_t
+#define bb236 u_int8_t
 #define bb254 u_int16_t
-#define bb248 u_int32_t
-#define bb270 u_int64_t
+#define bb252 u_int32_t
+#define bb269 u_int64_t
 #define bbb void
 #define bb112 wchar_t
 #define bb35 name
@@ -57,7 +57,7 @@
 #define bb91 NULL
 #define bb100 goto
 #define bb1316 sprintf
-#define bb607 printk
+#define bb590 printk
 #define bb2606 KERN_ALERT
 #define bb2630 timespec
 #define bb2574 getnstimeofday

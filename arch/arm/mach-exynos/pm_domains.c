@@ -166,7 +166,7 @@ static int exynos_pd_power(struct generic_pm_domain *domain, bool power_on)
 	}
 
 	/* Enable all the clocks of IPs in power domain */
-	pr_info("%s is %s\n", domain->name, power_on ? "on" : "off");
+	pr_debug("%s is %s\n", domain->name, power_on ? "on" : "off");
 	list_for_each_entry(pclk, &pd->list, node) {
 		if (clk_enable(pclk->clk)) {
 			pr_err("failed to enable clk %s\n", pclk->clk->name);

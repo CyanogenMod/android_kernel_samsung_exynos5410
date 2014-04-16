@@ -1,4 +1,4 @@
-/*
+﻿/*
  * cfg80211 scan result handling
  *
  * Copyright 2008 Johannes Berg <johannes@sipsolutions.net>
@@ -18,7 +18,16 @@
 #include "nl80211.h"
 #include "wext-compat.h"
 
+/*
+* Scan result expire time related to scan update.
+* samsung model need more time than google for
+* first connect and update ap list.
+*/
+#if defined (CONFIG_BCM4335)||defined (CONFIG_BCM4335_MODULE)
+#define IEEE80211_SCAN_RESULT_EXPIRE	(6 * HZ)
+#else
 #define IEEE80211_SCAN_RESULT_EXPIRE	(3 * HZ)
+#endif
 
 void ___cfg80211_scan_done(struct cfg80211_registered_device *rdev, bool leak)
 {
@@ -381,13 +390,10 @@ static int cmp_bss_core(struct cfg80211_bss *a,
 	}
 	r = memcmp(a->bssid, b->bssid, ETH_ALEN);
 #if defined(CONFIG_BCM4335) || defined(CONFIG_BCM4335_MODULE)
-	r = memcmp(a->bssid, b->bssid, ETH_ALEN);
 	if (r)
 		return r;
 	if (a->channel != b->channel)
 		return b->channel->center_freq - a->channel->center_freq;
-#else
-	return memcmp(a->bssid, b->bssid, ETH_ALEN);
 #endif /* CONFIG_BCM4335 */
 	return r;
 }

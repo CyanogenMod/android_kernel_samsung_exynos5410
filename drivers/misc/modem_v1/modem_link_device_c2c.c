@@ -198,7 +198,6 @@ static int fb_event_cb(struct notifier_block *self, unsigned long event,
 {
 	struct fb_event *evdata;
 	struct shmem_link_device *shmd;
-	int fb_blank;
 
 	if (!self)
 		return 0;
@@ -211,16 +210,16 @@ static int fb_event_cb(struct notifier_block *self, unsigned long event,
 	if (!data)
 		return 0;
 
-	evdata = (struct fb_event *)data;
-	fb_blank = *(int *)evdata->data;
-
 	shmd = container_of(self, struct shmem_link_device, fb_nb);
 	if (!shmd) {
 		mif_err("ERR! shmd == NULL\n");
 		return 0;
 	}
 
-	if (fb_blank == FB_BLANK_UNBLANK)
+	evdata = (struct fb_event *)data;
+	shmd->fb_blank = *(int *)evdata->data;
+
+	if (shmd->fb_blank == FB_BLANK_UNBLANK)
 		gpio_set_value(shmd->gpio_pda_active, 1);
 	else
 		gpio_set_value(shmd->gpio_pda_active, 0);
@@ -665,6 +664,12 @@ static void cmd_phone_start_handler(struct shmem_link_device *shmd)
 
 	ld->mode = LINK_MODE_IPC;
 	iod->modem_state_changed(iod, STATE_ONLINE);
+
+#if defined(CONFIG_FB)
+	/* drop the pda_active gpio when lcd was blanked */
+	if (shmd->fb_blank != FB_BLANK_UNBLANK)
+		gpio_set_value(shmd->gpio_pda_active, 0);
+#endif
 }
 
 /**
@@ -2233,6 +2238,7 @@ struct link_device *c2c_create_link_device(struct platform_device *pdev)
 	/* Register fb_event_cb to set "pda_active" according to an FB event */
 	shmd->fb_nb.notifier_call = fb_event_cb;
 	fb_register_client(&shmd->fb_nb);
+	shmd->fb_blank = FB_BLANK_UNBLANK;
 #elif defined(CONFIG_HAS_EARLYSUSPEND)
 	shmd->early_suspend.suspend = c2c_early_suspend;
 	shmd->early_suspend.resume = c2c_late_resume;

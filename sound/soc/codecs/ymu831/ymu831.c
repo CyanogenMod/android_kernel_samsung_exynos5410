@@ -1366,7 +1366,7 @@ static UINT8	mc_asoc_port_rate	= MCDRV_FS_48000;
 
 static struct mutex connect_path_mutex;
 static struct mutex hsdet_mutex;
-
+static struct mutex dsp_mutex;
 
 static int	set_bias_level(struct snd_soc_codec *codec,
 				enum snd_soc_bias_level level);
@@ -5387,6 +5387,7 @@ static void auto_powerdown(
 )
 {
 #if (AUTO_POWEROFF == AUTO_POWEROFF_ON)
+	int	err	= 0;
 	struct mc_asoc_mixer_path_ctl_info	mixer_ctl_info;
 	UINT8	bAEC[]	= {
 		0x41, 0x45, 0x43,
@@ -5448,8 +5449,11 @@ static void auto_powerdown(
 	&& (mixer_ctl_info.btmic_play == 0)
 	&& (mixer_ctl_info.lin1_play == 0)
 	&& (mixer_ctl_info.dtmf_control == 0))
-		_McDrv_Ctrl(MCDRV_SET_DSP, bAEC, NULL, sizeof(bAEC));
-
+		err	= _McDrv_Ctrl(MCDRV_SET_DSP, bAEC, NULL, sizeof(bAEC));
+		if (err != MCDRV_SUCCESS) {
+			;
+			dbg_info("%d: Error in MCDRV_SET_DSP\n", err);
+		}
 	printk("End_auto_powerdown\n");
 #endif
 }
@@ -5488,6 +5492,7 @@ static int add_dsp_prm(
 {
 	struct mc_asoc_dsp_param	*dsp_prm	= NULL;
 
+	mutex_lock(&dsp_mutex);
 	dsp_prm	= &mc_asoc->param_store[i][j];
 	if (dsp_prm->pabParam == NULL)
 		dbg_info("param_store[%d][%d]->pabParam = %8p\n",
@@ -5499,8 +5504,10 @@ static int add_dsp_prm(
 				dsp_prm->next	= kzalloc(
 					sizeof(struct mc_asoc_dsp_param),
 					GFP_KERNEL);
-				if (dsp_prm->next == NULL)
+				if (dsp_prm->next == NULL) {
+					mutex_unlock(&dsp_mutex);
 					return -ENOMEM;
+				}
 				dsp_prm	= dsp_prm->next;
 				dbg_info("next = %8p\n", dsp_prm);
 				break;
@@ -5512,6 +5519,7 @@ static int add_dsp_prm(
 
 	dsp_prm->pabParam	= param;
 	dsp_prm->dSize		= dSize;
+	mutex_unlock(&dsp_mutex);
 	return 0;
 }
 
@@ -5522,6 +5530,7 @@ static void del_dsp_prm(
 	int	i, j;
 	struct mc_asoc_dsp_param	*dsp_prm	= NULL;
 	struct mc_asoc_dsp_param	*next_prm	= NULL;
+	mutex_lock(&dsp_mutex);
 
 	for (i = 0; i <= DSP_PRM_VC_2MIC; i++) {
 		for (j = 0; j <= DSP_PRM_USER; j++) {
@@ -5563,6 +5572,7 @@ static void del_dsp_prm(
 	dsp_mem_pt	= 0;
 	dbg_info("dsp_mem_pt:%d\n", dsp_mem_pt);
 #endif
+	mutex_unlock(&dsp_mutex);
 }
 
 static int set_audio_mode_play(
@@ -8277,7 +8287,7 @@ static int mc_asoc_probe(
 
 	mutex_init(&connect_path_mutex);
 	mutex_init(&hsdet_mutex);
-
+	mutex_init(&dsp_mutex);
 
 	workq_mb4	= create_workqueue("mb4");
 	if (workq_mb4 == NULL) {
@@ -8665,7 +8675,7 @@ static int mc_asoc_remove(struct snd_soc_codec *codec)
 
 	mutex_destroy(&connect_path_mutex);
 	mutex_destroy(&hsdet_mutex);
-
+	mutex_destroy(&dsp_mutex);
 
 	return 0;
 }

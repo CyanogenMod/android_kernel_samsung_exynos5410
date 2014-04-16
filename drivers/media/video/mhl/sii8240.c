@@ -1326,12 +1326,8 @@ static int sii8240_init_regs(struct sii8240_data *sii8240)
 	ret = mhl_write_byte_reg(hdmi, 0x00, 0x00);
 	if (ret < 0)
 		return ret;
-	/* TODO: Why writing the same register two times?? */
+	/*set to 1Xzone*/
 	ret = mhl_write_byte_reg(hdmi, 0x4C, 0xD0);
-	if (ret < 0)
-		return ret;
-
-	ret = mhl_write_byte_reg(hdmi, 0x4C, 0xE0);
 	if (ret < 0)
 		return ret;
 
@@ -1715,7 +1711,7 @@ static void sii8240_setup_charging(struct sii8240_data *sii8240)
 	u8	devType, pow, plim, value;
 	u8	*peer_devcap = sii8240->regs.peer_devcap;
 
-	if ((peer_devcap[MHL_DEVCAP_MHL_VERSION] & 0xF0) >= 0x20) {
+	if ((peer_devcap[MHL_DEVCAP_MHL_VERSION] & 0xF0) == 0x20) {
 		value = peer_devcap[MHL_DEVCAP_DEV_CAT];
 
 		devType = MHL_FLD_GET(value, 3, 0);
@@ -2352,11 +2348,8 @@ static int sii8240_bypass_avi_info(struct sii8240_data *sii8240)
 					CBUS_MHL_STATUS_OFFSET_1,
 					sii8240->regs.link_mode, 0);
 
-	/*HDMI input clock is under 75MHz*/
-	if (sii8240->aviInfoFrame[INFO_VIC] < 4)
-		ret = mhl_write_byte_reg(hdmi, 0x4C, 0xE0);
-	else
-		ret = mhl_write_byte_reg(hdmi, 0x4C, 0xD0);
+	/*set to 1Xzone*/
+	ret = mhl_write_byte_reg(hdmi, 0x4C, 0xD0);
 
 	/*bypass avi info*/
 	memcpy(&sii8240->current_aviInfoFrame,
@@ -2421,7 +2414,7 @@ static void sii8240_avi_control_thread(struct work_struct *work)
 			goto exit;
 		}
 
-		if ((sii8240->regs.peer_devcap[MHL_DEVCAP_MHL_VERSION] >= 0x20)
+		if ((sii8240->regs.peer_devcap[MHL_DEVCAP_MHL_VERSION] == 0x20)
 		 && (sii8240->regs.peer_devcap[MHL_DEVCAP_VID_LINK_MODE] &
 					 (MHL_DEV_VID_LINK_SUPP_PPIXEL |
 					MHL_DEV_VID_LINK_SUPPYCBCR422)) &&
@@ -2539,7 +2532,7 @@ static void sii8240_avi_control_thread(struct work_struct *work)
 		}
 
 		if ((sii8240->regs.peer_devcap[MHL_DEVCAP_MHL_VERSION]
-						>= 0x20) &&
+						& 0x20) &&
 		(sii8240->regs.peer_devcap[MHL_DEVCAP_VID_LINK_MODE] &
 				 MHL_DEV_VID_LINK_SUPP_PPIXEL) &&
 		(sii8240->regs.peer_devcap[MHL_DEVCAP_VID_LINK_MODE] &
@@ -2574,7 +2567,7 @@ static void sii8240_detection_restart(struct work_struct *work)
 		goto disconnection_exit;
 	}
 	sii8240->state = STATE_DISCONNECTED;
-	sii8240->rgnd = RGND_UNKNOWN;
+	/*sii8240->rgnd = RGND_UNKNOWN;*/
 	sii8240->cbus_ready = 0;
 	sii8240->pdata->hw_reset();
 	if (sii8240_init_regs(sii8240) < 0) {

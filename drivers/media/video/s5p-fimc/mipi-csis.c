@@ -431,7 +431,7 @@ static int s5pcsis_pm_suspend(struct device *dev, bool runtime)
 	mutex_lock(&state->lock);
 	if (state->flags & ST_POWERED) {
 		s5pcsis_stop_stream(state);
-		ret = pdata->phy_enable(state->pdev, false);
+		ret = pdata->phy_enable(state->pdev->id, false);
 		if (ret)
 			goto unlock;
 		ret = regulator_bulk_disable(CSIS_NUM_SUPPLIES,
@@ -468,7 +468,7 @@ static int s5pcsis_pm_resume(struct device *dev, bool runtime)
 					    state->supplies);
 		if (ret)
 			goto unlock;
-		ret = pdata->phy_enable(state->pdev, true);
+		ret = pdata->phy_enable(state->pdev->id, true);
 		if (!ret) {
 			state->flags |= ST_POWERED;
 		} else {
