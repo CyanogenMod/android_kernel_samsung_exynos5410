@@ -137,6 +137,16 @@ static int sec_bat_is_lpm_check(char *str)
 }
 __setup("androidboot.mode=", sec_bat_is_lpm_check);
 
+static int legacy_sec_bat_is_lpm_check(char *str)
+{
+	get_option(&str, &lpcharge);
+
+	pr_info("%s: Low power charging mode: %d\n", __func__, lpcharge);
+
+	return lpcharge;
+}
+__setup("lpcharge=", legacy_sec_bat_is_lpm_check);
+
 static bool sec_bat_is_lpm(void)
 {
 	return lpcharge;
