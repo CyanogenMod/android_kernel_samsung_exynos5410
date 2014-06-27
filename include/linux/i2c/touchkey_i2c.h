@@ -171,7 +171,7 @@ struct touchkey_i2c {
 #ifdef TKEY_FLIP_MODE
 	bool enabled_flip;
 #endif
-
+	atomic_t keypad_enable;
 };
 
 extern struct class *sec_class;

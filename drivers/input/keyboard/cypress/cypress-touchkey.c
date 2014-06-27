@@ -919,6 +919,9 @@ static irqreturn_t touchkey_interrupt(int irq, void *dev_id)
 	int keycode_type = 0;
 	int pressed;
 
+	if (!atomic_read(&tkey_i2c->keypad_enable))
+		return IRQ_HANDLED;
+
 	retry = 3;
 	while (retry--) {
 		ret = i2c_touchkey_read(tkey_i2c->client,
@@ -1550,6 +1553,38 @@ static ssize_t set_touchkey_firm_status_show(struct device *dev,
 	return count;
 }
 
+static ssize_t sec_keypad_enable_show(struct device *dev,
+				      struct device_attribute *attr,
+				      char *buf)
+{
+	struct touchkey_i2c *tkey_i2c = dev_get_drvdata(dev);
+	return sprintf(buf, "%d\n", atomic_read(&tkey_i2c->keypad_enable));
+}
+
+static ssize_t sec_keypad_enable_store(struct device *dev,
+				       struct device_attribute *attr,
+				       const char *buf, size_t count)
+{
+	struct touchkey_i2c *tkey_i2c = dev_get_drvdata(dev);
+	int i;
+
+	unsigned int val = 0;
+	sscanf(buf, "%d", &val);
+	val = (val == 0 ? 0 : 1);
+	if (val) {
+		for (i = 0; i < touchkey_count; i++)
+			set_bit(touchkey_keycode[i],
+					tkey_i2c->input_dev->keybit);
+	} else {
+		for (i = 0; i < touchkey_count; i++)
+			clear_bit(touchkey_keycode[i],
+					tkey_i2c->input_dev->keybit);
+	}
+	input_sync(tkey_i2c->input_dev);
+
+	return count;
+}
+
 static DEVICE_ATTR(brightness, S_IRUGO | S_IWUSR | S_IWGRP, NULL,
 		   touchkey_led_control);
 static DEVICE_ATTR(touchkey_menu, S_IRUGO | S_IWUSR | S_IWGRP,
@@ -1601,6 +1636,9 @@ static DEVICE_ATTR(flip_mode, S_IRUGO | S_IWUSR | S_IWGRP, NULL,
 		   flip_cover_mode_enable);
 #endif
 
+static DEVICE_ATTR(keypad_enable, S_IRUGO|S_IWUSR, sec_keypad_enable_show,
+		   sec_keypad_enable_store);
+
 static struct attribute *touchkey_attributes[] = {
 	&dev_attr_brightness.attr,
 	&dev_attr_touchkey_menu.attr,
@@ -1636,6 +1674,7 @@ static struct attribute *touchkey_attributes[] = {
 #ifdef TKEY_FLIP_MODE
 	&dev_attr_flip_mode.attr,
 #endif
+	&dev_attr_keypad_enable.attr,
 	NULL,
 };
 
@@ -1710,6 +1749,8 @@ static int i2c_touchkey_probe(struct i2c_client *client,
 #ifdef CONFIG_VT_TKEY_SKIP_MATCH
 	set_bit(EV_TOUCHKEY, input_dev->evbit);
 #endif
+
+	atomic_set(&tkey_i2c->keypad_enable, 1);
 
 	for (i = 1; i < touchkey_count; i++)
 		set_bit(touchkey_keycode[i], input_dev->keybit);
