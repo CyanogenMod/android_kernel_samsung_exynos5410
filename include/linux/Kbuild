@@ -411,4 +411,5 @@ header-y += x25.h
 header-y += xattr.h
 header-y += xfrm.h
 header-y += videodev2_exynos_media.h
+header-y += videodev2_exynos_camera.h
 header-y += s3c-fb.h
