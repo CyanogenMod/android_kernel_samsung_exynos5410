@@ -3789,7 +3789,7 @@ int fimc_is_ischain_open(struct fimc_is_device_ischain *device,
 
 	/*fimc_is_fw_clear_irq1_all(core);*/
 
-	read_data_from_file("/data/CameraID.txt", buf, 1, &pos);
+	read_data_from_file("/data/camera/camid", buf, 1, &pos);
 	if(buf[0] == '0')
 		cam_id = CAMERA_SINGLE_REAR;
 	else if(buf[0] == '1')
