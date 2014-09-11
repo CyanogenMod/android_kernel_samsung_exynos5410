@@ -172,6 +172,7 @@ struct touchkey_i2c {
 	bool enabled_flip;
 #endif
 	atomic_t keypad_enable;
+	struct notifier_block fb_notif;
 };
 
 extern struct class *sec_class;
