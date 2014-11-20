@@ -879,7 +879,6 @@ static int __init sec_pmic_reinit(void)
 		s2m_ldo38_data.constraints.boot_on = 1;
 	}
 #endif
-	regulator_has_full_constraints();
 
 	return 0;
 }
