@@ -3398,9 +3398,44 @@ int wifi_get_irq_number(unsigned long *irq_flags_ptr)
 #endif
 }
 
+
+#ifdef ENABLE_4335BT_WAR
+bool  check_bcm4335_rev(void)
+{
+        int ret = -1;
+        struct file *fp = NULL;
+        char *filepath = "/data/.rev";
+        char chip_rev[10]={0,};
+        bool is_revb0 = true;
+
+        printk("check BCM4335, check_bcm4335_rev \n");
+        fp = filp_open(filepath, O_RDONLY, 0);
+        if (IS_ERR(fp)) {
+                printk("/data/.rev file open error\n");
+                is_revb0 = true;
+
+        } else {
+                printk("/data/.rev file Found\n");
+                ret = kernel_read(fp, 0, (char *)chip_rev, 9);
+                if(ret != -1 && NULL != strstr(chip_rev,"BCM4335B0")) {
+                        printk("Found BCM4335B0\n");
+                        is_revb0 = true;
+                } else {
+                        is_revb0 = false;
+                }
+                filp_close(fp, NULL);
+        }
+
+        return is_revb0;
+}
+#endif
+
 int wifi_set_power(int on, unsigned long msec)
 {
 	int ret = 0;
+#ifdef ENABLE_4335BT_WAR
+        bool is4335_revb0 = true;
+#endif
 	DHD_ERROR(("%s = %d\n", __FUNCTION__, on));
 	if (wifi_regulator && on)
 		ret = regulator_enable(wifi_regulator);
@@ -3417,7 +3452,13 @@ int wifi_set_power(int on, unsigned long msec)
 			bcm_bt_unlock(lock_cookie_wifi);
 		}
 #endif /* ENABLE_4335BT_WAR */
+
+#ifdef ENABLE_4335BT_WAR
+		is4335_revb0 = check_bcm4335_rev();
+		ret = wifi_control_data->set_power(on, is4335_revb0);
+#else 
 		ret = wifi_control_data->set_power(on);
+#endif
 	}
 
 	if (wifi_regulator && !on)

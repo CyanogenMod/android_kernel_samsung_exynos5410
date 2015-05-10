@@ -167,6 +167,7 @@ struct s5p_mfc_buf {
 		dma_addr_t stream;
 	} planes;
 	int used;
+	int already;
 };
 
 #define vb_to_mfc_buf(x)	\
@@ -795,6 +796,9 @@ static inline unsigned int mfc_version(struct s5p_mfc_dev *dev)
 
 #define HW_LOCK_CLEAR_MASK		(0xFFFFFFFF)
 
+#define is_h264(ctx)		((ctx->codec_mode == S5P_FIMV_CODEC_H264_DEC) ||\
+				(ctx->codec_mode == S5P_FIMV_CODEC_H264_MVC_DEC))
+
 /* Extra information for Decoder */
 #define	DEC_SET_DYNAMIC_DPB		(1 << 1)
 
@@ -807,7 +811,17 @@ struct s5p_mfc_fmt {
 };
 
 int get_framerate(struct timeval *to, struct timeval *from);
-inline int clear_hw_bit(struct s5p_mfc_ctx *ctx);
+
+static inline int clear_hw_bit(struct s5p_mfc_ctx *ctx)
+{
+	struct s5p_mfc_dev *dev = ctx->dev;
+	int ret = -1;
+
+	if (!atomic_read(&dev->watchdog_run))
+		ret = test_and_clear_bit(ctx->num, &dev->hw_lock);
+
+	return ret;
+}
 inline int s5p_mfc_get_new_ctx(struct s5p_mfc_dev *dev);
 
 #ifdef CONFIG_ION_EXYNOS

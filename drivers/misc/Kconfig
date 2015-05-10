@@ -539,6 +539,13 @@ config MUIC_MAX77803_SUPPORT_MHL_CABLE_DETECTION
 	  If you say yes here you will get support for the MHL cable 
 	  detection. 
 
+config MUIC_MAX77803_SUPPORT_PS_CABLE
+	bool "MUIC_MAX77803_SUPPORT_PS_CABLE"
+	depends on MFD_MAX77803
+	default n
+	help
+	  If you say yes here you can recognize PS cable
+
 config MUIC_MAX77693_SUPPORT_MHL_CABLE_DETECTION
         bool "MUIC_MAX77693_SUPPORT_MHL_CABLE_DETECTION"
         depends on MFD_MAX77693

@@ -15,7 +15,6 @@
 #include <linux/fs.h>
 #include <linux/miscdevice.h>
 #include <linux/mutex.h>
-#include <linux/pm_runtime.h>
 #include <linux/sched.h>
 #include <linux/slab.h>
 #include <linux/mm.h>
@@ -77,12 +76,6 @@ static int secmem_open(struct inode *inode, struct file *file)
 static void drm_enable_locked(struct secmem_info *info, bool enable)
 {
 	if (drm_onoff != enable) {
-#ifdef CONFIG_EXYNOS5_DEV_GSC
-		if (enable)
-			pm_runtime_forbid(info->dev->parent);
-		else
-			pm_runtime_allow(info->dev->parent);
-#endif
 		drm_onoff = enable;
 		/*
 		 * this will only allow this instance to turn drm_off either by
@@ -174,21 +167,29 @@ static long secmem_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			return -EFAULT;
 
 		client = ion_client_create(ion_exynos, -1, "DRM");
-		if (IS_ERR(client))
+		if (IS_ERR(client)) {
 			pr_err("%s: Failed to get ion_client of DRM\n",
 				__func__);
+			return -ENOMEM;
+		}
 
 		data.fd = fd_info.fd;
 		data.handle = ion_import_dma_buf(client, data.fd);
 		pr_debug("%s: fd from user space = %d\n",
 				__func__, fd_info.fd);
-		if (IS_ERR(data.handle))
+		if (IS_ERR(data.handle)) {
 			pr_err("%s: Failed to get ion_handle of DRM\n",
 				__func__);
+			ion_client_destroy(client);
+			return -ENOMEM;
+		}
 
-		if (ion_phys(client, data.handle, &fd_info.phys, &len))
+		if (ion_phys(client, data.handle, &fd_info.phys, &len)) {
 			pr_err("%s: Failed to get phys. addr of DRM\n",
 				__func__);
+			ion_client_destroy(client);
+			return -ENOMEM;
+		}
 
 		pr_debug("%s: physical addr from kernel space = 0x%08x\n",
 				__func__, (unsigned int)fd_info.phys);
@@ -297,9 +298,6 @@ struct miscdevice secmem = {
 	.minor	= MISC_DYNAMIC_MINOR,
 	.name	= SECMEM_DEV_NAME,
 	.fops	= &secmem_fops,
-#ifdef CONFIG_EXYNOS5_DEV_GSC
-	.parent	= &exynos5_device_gsc0.dev,
-#endif
 };
 
 static int __init secmem_init(void)
@@ -315,7 +313,6 @@ static int __init secmem_init(void)
 
 	crypto_driver = NULL;
 
-	pm_runtime_enable(secmem.this_device);
 #if defined(CONFIG_ARM_EXYNOS5410_BUS_DEVFREQ)
 	pm_qos_add_request(&exynos5_secmem_mif_qos, PM_QOS_BUS_THROUGHPUT, 0);
 #endif
@@ -329,7 +326,6 @@ static void __exit secmem_exit(void)
 	pm_qos_remove_request(&exynos5_secmem_mif_qos);
 #endif
 
-	__pm_runtime_disable(secmem.this_device, false);
 	misc_deregister(&secmem);
 }
 

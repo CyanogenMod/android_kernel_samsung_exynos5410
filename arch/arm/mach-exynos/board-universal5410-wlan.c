@@ -56,6 +56,12 @@ void *wlan_static_scan_buf0;
 void *wlan_static_scan_buf1;
 void *wlan_static_dhd_info_buf;
 
+#define ENABLE_4335BT_WAR
+#ifdef ENABLE_4335BT_WAR
+static int bt_off = 0;
+extern int bt_is_running;
+#endif /* ENABLE_4335BT_WAR */
+
 static void *brcm_wlan_mem_prealloc(int section, unsigned long size)
 {
 	if (section == PREALLOC_WLAN_SEC_NUM)
@@ -194,13 +200,30 @@ static void s3c_config_gpio_alive_table
 	}
 }
 
+#ifdef ENABLE_4335BT_WAR
+static int brcm_wlan_power(int onoff,bool b0rev)
+#else
 static int brcm_wlan_power(int onoff)
+#endif
 {
 	printk(KERN_INFO"------------------------------------------------");
 	printk(KERN_INFO"------------------------------------------------\n");
 	printk(KERN_INFO"%s Enter: power %s\n", __func__, onoff ? "on" : "off");
 
 	if (onoff) {
+#ifdef ENABLE_4335BT_WAR
+		/*  Xtal start up workaround patch */
+		if(b0rev == true && gpio_get_value(GPIO_BT_EN) == 0)
+		{
+			bt_off = 1;
+			gpio_set_value(GPIO_BT_EN, GPIO_LEVEL_HIGH);
+			printk("[brcm_wlan_power] BT_REG_ON -> On\n");
+			udelay(50);
+		}
+		else {
+			bt_off = 0;
+		}
+#endif /* ENABLE_4335BT_WAR */
 		s3c_config_gpio_alive_table
 			(ARRAY_SIZE(wlan_on_gpio_table), wlan_on_gpio_table);
 		s5p_gpio_set_pd_cfg(GPIO_WLAN_EN, S5P_GPIO_PD_PREV_STATE);
@@ -215,7 +238,17 @@ static int brcm_wlan_power(int onoff)
 		s5p_gpio_set_pd_cfg(GPIO_WLAN_EN, S5P_GPIO_PD_OUTPUT0);
 		printk(KERN_DEBUG"WLAN: GPIO_WLAN_EN = %d\n",
 		gpio_get_value(GPIO_WLAN_EN));
+		udelay(100);
 	}
+
+#ifdef ENABLE_4335BT_WAR
+	/*  Xtal start up workaround patch */
+	if(onoff && (bt_off == 1) && (bt_is_running == 0)) {
+		udelay(100);
+		gpio_set_value(GPIO_BT_EN, GPIO_LEVEL_LOW);
+		printk("[brcm_wlan_power]  BT_REG_ON -> Off\n");
+	}
+#endif /* ENABLE_4335BT_WAR */
 
 	return 0;
 }

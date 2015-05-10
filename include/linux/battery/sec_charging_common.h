@@ -35,7 +35,7 @@
 
 
 /* definitions */
-#define	SEC_SIZEOF_POWER_SUPPLY_TYPE	13
+#define	SEC_SIZEOF_POWER_SUPPLY_TYPE	17
 
 enum sec_battery_voltage_mode {
 	/* average voltage */
@@ -56,8 +56,6 @@ enum sec_battery_capacity_mode {
 };
 
 /* ADC type */
-#define SEC_BATTERY_ADC_TYPE_NUM	3
-
 enum sec_battery_adc_type {
 	/* NOT using this ADC channel */
 	SEC_BATTERY_ADC_TYPE_NONE = 0,
@@ -65,6 +63,7 @@ enum sec_battery_adc_type {
 	SEC_BATTERY_ADC_TYPE_AP,
 	/* ADC by additional IC */
 	SEC_BATTERY_ADC_TYPE_IC,
+	SEC_BATTERY_ADC_TYPE_NUM
 };
 
 enum sec_battery_adc_channel {
@@ -73,6 +72,8 @@ enum sec_battery_adc_channel {
 	SEC_BAT_ADC_CHANNEL_TEMP,
 	SEC_BAT_ADC_CHANNEL_TEMP_AMBIENT,
 	SEC_BAT_ADC_CHANNEL_FULL_CHECK,
+	SEC_BAT_ADC_CHANNEL_VOLTAGE_NOW,
+	SEC_BAT_ADC_CHANNEL_NUM
 };
 
 /* charging mode */
@@ -261,6 +262,10 @@ enum sec_battery_temp_check {
   * check cable by interrupt
   */
 #define SEC_BATTERY_CABLE_CHECK_INT			8
+/* SEC_BATTERY_CABLE_CHECK_CHGINT
+  * check cable by charger interrupt
+  */
+#define SEC_BATTERY_CABLE_CHECK_CHGINT			16
 /* SEC_BATTERY_CABLE_CHECK_POLLING
   * check cable by GPIO polling
   */

@@ -204,17 +204,6 @@ void mfc_sched_worker(struct work_struct *work)
 		mfc_err("no mfc device to run\n");
 }
 
-inline int clear_hw_bit(struct s5p_mfc_ctx *ctx)
-{
-	struct s5p_mfc_dev *dev = ctx->dev;
-	int ret = -1;
-
-	if (!atomic_read(&dev->watchdog_run))
-		ret = test_and_clear_bit(ctx->num, &dev->hw_lock);
-
-	return ret;
-}
-
 /* Helper functions for interrupt processing */
 /* Remove from hw execution round robin */
 inline void clear_work_bit(struct s5p_mfc_ctx *ctx)
@@ -232,9 +221,9 @@ inline void clear_work_bit(struct s5p_mfc_ctx *ctx)
 		return;
 	}
 
-	spin_lock(&dev->condlock);
+	spin_lock_irq(&dev->condlock);
 	clear_bit(ctx->num, &dev->ctx_work_bits);
-	spin_unlock(&dev->condlock);
+	spin_unlock_irq(&dev->condlock);
 }
 
 /* Wake up context wait_queue */
@@ -737,6 +726,27 @@ static void s5p_mfc_handle_frame_new(struct s5p_mfc_ctx *ctx, unsigned int err)
 			break;
 		}
 	}
+
+	if (is_h264(ctx) && dec->is_dynamic_dpb) {
+		dst_frame_status = s5p_mfc_get_dspl_status()
+			& S5P_FIMV_DEC_STATUS_DECODING_STATUS_MASK;
+		if ((dst_frame_status == S5P_FIMV_DEC_STATUS_DISPLAY_ONLY) &&
+				!list_empty(&ctx->dst_queue) &&
+				(dec->ref_queue_cnt < ctx->dpb_count)) {
+			dst_buf = list_entry(ctx->dst_queue.next,
+						struct s5p_mfc_buf, list);
+			if (dst_buf->already) {
+				list_del(&dst_buf->list);
+				ctx->dst_queue_cnt--;
+
+				list_add_tail(&dst_buf->list, &dec->ref_queue);
+				dec->ref_queue_cnt++;
+
+				dst_buf->already = 0;
+				mfc_debug(2, "Move dst buf to ref buf\n");
+			}
+		}
+	}
 }
 
 static int s5p_mfc_find_start_code(unsigned char *src_mem, unsigned int remainSize)
@@ -758,6 +768,7 @@ static void s5p_mfc_handle_frame_error(struct s5p_mfc_ctx *ctx,
 	struct s5p_mfc_dev *dev;
 	struct s5p_mfc_dec *dec;
 	struct s5p_mfc_buf *src_buf;
+	struct s5p_mfc_buf *dst_buf;
 	unsigned long flags;
 	unsigned int index;
 
@@ -784,7 +795,24 @@ static void s5p_mfc_handle_frame_error(struct s5p_mfc_ctx *ctx,
 	dec->remained = 0;
 
 	spin_lock_irqsave(&dev->irqlock, flags);
-	if (!list_empty(&ctx->src_queue)) {
+	if ((err == 33) && is_h264(ctx) && dec->is_dynamic_dpb &&
+			!list_empty(&ctx->dst_queue) && !list_empty(&dec->ref_queue)) {
+
+		/* Replace dst queue and ref queue, each queue cnt is not changed */
+		dst_buf = list_entry(ctx->dst_queue.next, struct s5p_mfc_buf, list);
+		list_del(&dst_buf->list);
+		list_add_tail(&dst_buf->list, &dec->ref_queue);
+
+		index = dst_buf->vb.v4l2_buf.index;
+		mfc_err("Try to use another ref buffer [%d]\n", index);
+
+		dst_buf = list_entry(dec->ref_queue.next, struct s5p_mfc_buf, list);
+		list_del(&dst_buf->list);
+		list_add_tail(&dst_buf->list, &ctx->dst_queue);
+
+		index = dst_buf->vb.v4l2_buf.index;
+		mfc_err("get buffer [%d] from ref queue\n", index);
+	} else if (!list_empty(&ctx->src_queue)) {
 		src_buf = list_entry(ctx->src_queue.next, struct s5p_mfc_buf, list);
 		index = src_buf->vb.v4l2_buf.index;
 		if (call_cop(ctx, recover_buf_ctrls_val, ctx, &ctx->src_ctrls[index]) < 0)
@@ -803,7 +831,7 @@ static void s5p_mfc_handle_frame_error(struct s5p_mfc_ctx *ctx,
 
 	mfc_debug(2, "Assesing whether this context should be run again.\n");
 	/* This context state is always RUNNING */
-	if (ctx->src_queue_cnt == 0 || ctx->dst_queue_cnt < ctx->dpb_count) {
+	if (!s5p_mfc_dec_ctx_ready(ctx)) {
 		mfc_debug(2, "No need to run again.\n");
 		clear_work_bit(ctx);
 	}
@@ -840,10 +868,33 @@ static void s5p_mfc_handle_ref_frame(struct s5p_mfc_ctx *ctx)
 
 		list_add_tail(&dec_buf->list, &dec->ref_queue);
 		dec->ref_queue_cnt++;
-	} else {
-		mfc_debug(2, "Can't find buffer for addr = 0x%x\n", dec_addr);
-		mfc_debug(2, "Expected addr = 0x%x, used = %d\n",
-						buf_addr, dec_buf->used);
+	} else if (is_h264(ctx)) {
+		int found = 0;
+
+		/* Try to search decoded address in whole dst queue */
+		list_for_each_entry(dec_buf, &ctx->dst_queue, list) {
+			buf_addr = s5p_mfc_mem_plane_addr(ctx, &dec_buf->vb, 0);
+			if ((buf_addr == dec_addr) && (dec_buf->used == 1)) {
+				found = 1;
+				break;
+			}
+		}
+
+		if (found) {
+			buf_addr = s5p_mfc_mem_plane_addr(ctx, &dec_buf->vb, 0);
+			mfc_debug(2, "Found in dst queue = 0x%x, buf = 0x%x\n",
+							dec_addr, buf_addr);
+
+			list_del(&dec_buf->list);
+			ctx->dst_queue_cnt--;
+
+			list_add_tail(&dec_buf->list, &dec->ref_queue);
+			dec->ref_queue_cnt++;
+		} else {
+			mfc_debug(2, "Can't find buffer for addr = 0x%x\n", dec_addr);
+			mfc_debug(2, "Expected addr = 0x%x, used = %d\n",
+					buf_addr, dec_buf->used);
+		}
 	}
 }
 
@@ -1314,9 +1365,9 @@ static irqreturn_t s5p_mfc_irq(int irq, void *priv)
 		ctx->int_type = reason;
 		ctx->int_err = err;
 		ctx->int_cond = 1;
-		spin_lock(&dev->condlock);
+		spin_lock_irq(&dev->condlock);
 		clear_bit(ctx->num, &dev->ctx_work_bits);
-		spin_unlock(&dev->condlock);
+		spin_unlock_irq(&dev->condlock);
 		if (err != 0) {
 			if (clear_hw_bit(ctx) == 0)
 				BUG();
@@ -1352,15 +1403,15 @@ static irqreturn_t s5p_mfc_irq(int irq, void *priv)
 			if (ctx->is_dpb_realloc)
 				ctx->is_dpb_realloc = 0;
 			if (s5p_mfc_dec_ctx_ready(ctx)) {
-				spin_lock(&dev->condlock);
+				spin_lock_irq(&dev->condlock);
 				set_bit(ctx->num, &dev->ctx_work_bits);
-				spin_unlock(&dev->condlock);
+				spin_unlock_irq(&dev->condlock);
 			}
 		} else if (ctx->type == MFCINST_ENCODER) {
 			if (s5p_mfc_enc_ctx_ready(ctx)) {
-				spin_lock(&dev->condlock);
+				spin_lock_irq(&dev->condlock);
 				set_bit(ctx->num, &dev->ctx_work_bits);
-				spin_unlock(&dev->condlock);
+				spin_unlock_irq(&dev->condlock);
 			}
 		}
 
