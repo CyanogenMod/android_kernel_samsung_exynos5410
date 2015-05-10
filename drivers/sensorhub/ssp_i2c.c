@@ -171,7 +171,7 @@ int send_instruction(struct ssp_data *data, u8 uInst,
 			__func__, data->fw_dl_state);
 		return SUCCESS;
 	} else if ((!(data->uSensorState & (1 << uSensorType)))
-		&& (uInst <= CHANGE_DELAY) && (uSensorType < SIG_MOTION_SENSOR)) {
+		&& (uInst <= CHANGE_DELAY)) {
 		pr_err("[SSP]: %s - Bypass Inst Skip! - %u\n",
 			__func__, uSensorType);
 		return FAIL;

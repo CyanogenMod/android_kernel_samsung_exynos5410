@@ -48,21 +48,6 @@ early_param("miffreq", get_mif_freq);
 static bool en_profile = false;
 static struct device *mif_dev;
 
-#ifdef CONFIG_EXYNOS_THERMAL
-bool mif_is_probed;
-
-static int AREF_CRITICAL = 0x17;
-static int AREF_HOT = 0x2E;
-static int AREF_NORMAL = 0x5D;
-
-static int __init get_dram_type(char *str)
-{
-	AREF_NORMAL = 0x2E;
-	return 0;
-}
-early_param("d25", get_dram_type);
-#endif
-
 #define BPLL_S_ONLY_CHANGE
 #define SET_DREX_TIMING
 
@@ -74,6 +59,10 @@ static void __iomem *exynos5_base_drexI_0;
 #endif
 static void __iomem *phy0_base;
 static void __iomem *phy1_base;
+
+#define AREF_CRITICAL		0x17
+#define AREF_HOT		0x2E
+#define AREF_NORMAL		0x5D
 
 #define DREX_TIMINGAREF		0x30
 #define DREX_TIMINGROW		0x34
@@ -1065,7 +1054,7 @@ static int exynos5_bus_mif_tmu_notifier(struct notifier_block *notifier,
 
 	switch (event) {
 #ifdef CONFIG_ARM_TRUSTZONE
-	case MEM_TH_LV1:
+	case TMU_95:
 		exynos_smc(SMC_CMD_REG, SMC_REG_ID_SFR_W(EXYNOS5_PA_DREXI_0 + DREX_TIMINGAREF),
 				 AREF_NORMAL, 0);
 		exynos_smc(SMC_CMD_REG, SMC_REG_ID_SFR_W(EXYNOS5_PA_DREXI_1 + DREX_TIMINGAREF),
@@ -1075,7 +1064,7 @@ static int exynos5_bus_mif_tmu_notifier(struct notifier_block *notifier,
 			pm_qos_remove_request(&min_mif_thermal_qos);
 
 		break;
-	case MEM_TH_LV2:
+	case TMU_109:
 		/*
 		 * In case of temperature increment, set MIF level 200Mhz as minimum
 		 * before changing dram refresh counter.
@@ -1104,7 +1093,7 @@ static int exynos5_bus_mif_tmu_notifier(struct notifier_block *notifier,
 		}
 
 		break;
-	case MEM_TH_LV3:
+	case TMU_110:
 		if (pm_qos_request_active(&min_mif_thermal_qos))
 			pm_qos_update_request(&min_mif_thermal_qos, 400000);
 		else
@@ -1116,7 +1105,7 @@ static int exynos5_bus_mif_tmu_notifier(struct notifier_block *notifier,
 				AREF_CRITICAL, 0);
 		break;
 #else
-	case MEM_TH_LV1:
+	case TMU_95:
 		__raw_writel(AREF_NORMAL,(exynos5_base_drexI_0 + DREX_TIMINGAREF));
 		__raw_writel(AREF_NORMAL,(exynos5_base_drexI_1 + DREX_TIMINGAREF));
 
@@ -1124,7 +1113,7 @@ static int exynos5_bus_mif_tmu_notifier(struct notifier_block *notifier,
 			pm_qos_remove_request(&min_mif_thermal_qos);
 
 		break;
-	case MEM_TH_LV2:
+	case TMU_109:
 		if (*on < TMU_109) {
 			if (pm_qos_request_active(&min_mif_thermal_qos))
 				pm_qos_update_request(&min_mif_thermal_qos, 200000);
@@ -1142,7 +1131,7 @@ static int exynos5_bus_mif_tmu_notifier(struct notifier_block *notifier,
 		}
 
 		break;
-	case MEM_TH_LV3:
+	case TMU_110:
 		if (pm_qos_request_active(&min_mif_thermal_qos))
 			pm_qos_update_request(&min_mif_thermal_qos, 400000);
 		else
@@ -1277,7 +1266,6 @@ static __devinit int exynos5_busfreq_mif_probe(struct platform_device *pdev)
 
 #ifdef CONFIG_EXYNOS_THERMAL
 	exynos_tmu_add_notifier(&exynos5_bus_mif_tmu_nb);
-	mif_is_probed = true;
 #endif
 	cpufreq_register_notifier(&exynos5_mif_cpufreq_notifier, CPUFREQ_TRANSITION_NOTIFIER);
 

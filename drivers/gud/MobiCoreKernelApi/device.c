@@ -1,7 +1,7 @@
 /*
  * MobiCore client library device management.
  *
- * Device and Trustlet Session management Functions.
+ * Device and Trustlet Session management Funtions.
  *
  * <-- Copyright Giesecke & Devrient GmbH 2009 - 2012 -->
  *
@@ -11,7 +11,6 @@
  */
 #include <linux/list.h>
 #include <linux/slab.h>
-#include <linux/device.h>
 #include "mc_kernel_api.h"
 #include "public/mobicore_driver_api.h"
 
@@ -96,8 +95,7 @@ bool mcore_device_create_new_session(struct mcore_device_t *dev,
 {
 	/* Check if session_id already exists */
 	if (mcore_device_resolve_session_id(dev, session_id)) {
-		MCDRV_DBG_ERROR(mc_kapi,
-				" session %u already exists", session_id);
+		MCDRV_DBG_ERROR(" session %u already exists", session_id);
 		return false;
 	}
 	struct session *session =
@@ -186,8 +184,7 @@ bool mcore_device_free_contiguous_wsm(struct mcore_device_t *dev,
 	}
 
 	if (ret) {
-		MCDRV_DBG_VERBOSE(mc_kapi,
-				  "freeWsm virt_addr=0x%p, handle=%d",
+		MCDRV_DBG_VERBOSE("freeWsm virt_addr=0x%p, handle=%d",
 				  wsm->virt_addr, wsm->handle);
 
 		/* ignore return code */

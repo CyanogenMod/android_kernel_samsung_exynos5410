@@ -27,10 +27,6 @@
 #define srp_err(x...)
 #endif
 
-#define SRP_DISABLE	1
-#define SRP_ENABLE	2
-#define SRP_FIRM_BROKEN	3
-
 /* For SRP firmware */
 struct srp_fw_info {
 	const struct firmware *vliw;		/* VLIW */
@@ -162,7 +158,5 @@ enum {
 	RUNTIME = 0,
 	SLEEP,
 };
-
-extern int srp_check(int disable);
 
 #endif /* __SRP_ALP_H */

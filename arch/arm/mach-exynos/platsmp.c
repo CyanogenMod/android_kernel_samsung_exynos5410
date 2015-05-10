@@ -180,8 +180,7 @@ int __cpuinit boot_secondary(unsigned int cpu, struct task_struct *idle)
 	 */
 	spin_lock(&boot_lock);
 
-	if (soc_is_exynos5250())
-		watchdog_save();
+	watchdog_save();
 
 	ret = exynos_power_up_cpu(cpu);
 	if (ret) {
@@ -220,8 +219,7 @@ int __cpuinit boot_secondary(unsigned int cpu, struct task_struct *idle)
 		__raw_writel(virt_to_phys(exynos4_secondary_startup),
 			cpu_boot_info[cpu].boot_base);
 
-		if (soc_is_exynos5250())
-			watchdog_restore();
+		watchdog_restore();
 
 		if (soc_is_exynos5410())
 			dsb_sev();

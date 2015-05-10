@@ -148,7 +148,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "linkage.h"
 #include "buffer_manager.h"
 #include "secutils.h"
-#if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
+#if defined(SUPPORT_ANDROID_SYNC)
 #include "pvr_sync.h"
 #endif
 
@@ -204,6 +204,7 @@ IMG_UINT32 gPVRSuspendNotifier;
 #include <linux/omap_ion.h>
 extern struct ion_device *omap_ion_device;
 struct ion_client *gpsIONClient;
+EXPORT_SYMBOL(gpsIONClient);
 #endif /* defined(CONFIG_ION_OMAP) */
 
 /* PRQA S 3207 2 */ /* ignore 'not used' warning */
@@ -431,7 +432,7 @@ extern IMG_BOOL bEnableMIFMornitering;
 extern int exynos5_mif_register_notifier(struct notifier_block *n);
 static int exynos_g3d_mif_notifier(struct notifier_block *notifier, unsigned long event, void *v)
 {
-	if(event == MIF_DEVFREQ_EN_MONITORING)  {
+	if(event == MIF_DEVFREQ_EN_MONITORING)	{
 		PVR_LOG(("exynos_g3d_mif_notifier: MIF_DEVFREQ_EN_MONITORING"));
 		bEnableMIFMornitering = true;
 	}
@@ -608,7 +609,7 @@ PVR_MOD_STATIC void PVRSRVDriverShutdown(LDM_DEV *pDevice)
 		 * processes trying to use the driver after it has been
 		 * shutdown.
 		 */
-		LinuxLockMutexNested(&gPVRSRVLock, PVRSRV_LOCK_CLASS_BRIDGE);
+		LinuxLockMutex(&gPVRSRVLock);
 
 		(void) PVRSRVSetPowerStateKM(PVRSRV_SYS_POWER_STATE_D1);
 	}
@@ -669,7 +670,7 @@ PVR_MOD_STATIC int PVRSRVDriverSuspend(struct device *pDevice)
 
 	if (!bDriverIsSuspended && !bDriverIsShutdown)
 	{
-		LinuxLockMutexNested(&gPVRSRVLock, PVRSRV_LOCK_CLASS_BRIDGE);
+		LinuxLockMutex(&gPVRSRVLock);
 
 		if (PVRSRVSetPowerStateKM(PVRSRV_SYS_POWER_STATE_D3) == PVRSRV_OK)
 		{
@@ -860,7 +861,7 @@ static int PVRSRVOpen(struct inode unref__ * pInode, struct file *pFile)
 	PVRSRV_ENV_PER_PROCESS_DATA *psEnvPerProc;
 #endif
 
-	LinuxLockMutexNested(&gPVRSRVLock, PVRSRV_LOCK_CLASS_BRIDGE);
+	LinuxLockMutex(&gPVRSRVLock);
 
 	ui32PID = OSGetCurrentProcessIDKM();
 
@@ -927,7 +928,7 @@ static int PVRSRVRelease(struct inode unref__ * pInode, struct file *pFile)
 	PVRSRV_FILE_PRIVATE_DATA *psPrivateData;
 	int err = 0;
 
-	LinuxLockMutexNested(&gPVRSRVLock, PVRSRV_LOCK_CLASS_BRIDGE);
+	LinuxLockMutex(&gPVRSRVLock);
 
 #if defined(SUPPORT_DRI_DRM)
 	psPrivateData = (PVRSRV_FILE_PRIVATE_DATA *)pvPrivData;
@@ -1047,7 +1048,9 @@ static int __init PVRCore_Init(void)
 	struct device *psDev;
 #endif
 
-
+#if defined(SUPPORT_ANDROID_SYNC)
+	PVRSyncDeviceInit();
+#endif
 
 #if !defined(SUPPORT_DRI_DRM)
 	/*
@@ -1058,9 +1061,7 @@ static int __init PVRCore_Init(void)
 #endif
 	PVR_TRACE(("PVRCore_Init"));
 
-#if defined(PVR_LDM_MODULE) || defined(SUPPORT_DRI_DRM)
 	LinuxInitMutex(&gsPMMutex);
-#endif
 	LinuxInitMutex(&gPVRSRVLock);
 
 	if (CreateProcEntries ())
@@ -1109,16 +1110,6 @@ static int __init PVRCore_Init(void)
 #endif
 #if defined(CONFIG_ARM_EXYNOS5410_BUS_DEVFREQ)
 	exynos5_mif_register_notifier(&exynos_mif_nb);
-#endif
-#if defined(MODULE) && !defined(PVR_USE_PRE_REGISTERED_PLATFORM_DEV)
-	if ((error = platform_device_register(&powervr_device)) != 0)
-	{
-		platform_driver_unregister(&powervr_driver);
-
-		PVR_DPF((PVR_DBG_ERROR, "PVRCore_Init: unable to register platform device (%d)", error));
-
-		goto init_failed;
-	}
 #endif
 #endif /* PVR_LDM_PLATFORM_MODULE */
 
@@ -1197,9 +1188,6 @@ static int __init PVRCore_Init(void)
 #endif /* defined(PVR_LDM_DEVICE_CLASS) */
 #endif /* !defined(SUPPORT_DRI_DRM) */
 
-#if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
-	PVRSyncDeviceInit();
-#endif
 	return 0;
 
 #if !defined(SUPPORT_DRI_DRM)
@@ -1220,9 +1208,7 @@ sys_deinit:
 
 /*S.LSI*/
 #if defined (PVR_LDM_PLATFORM_MODULE)
-#if defined(MODULE) && !defined(PVR_USE_PRE_REGISTERED_PLATFORM_DEV)
 	platform_device_unregister(&powervr_device);
-#endif
 	platform_driver_unregister(&powervr_driver);
 #endif
 #ifdef CONFIG_PM_RUNTIME
@@ -1294,7 +1280,7 @@ static void __exit PVRCore_Cleanup(void)
 	SysAcquireData(&psSysData);
 #endif
 
-#if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
+#if defined(SUPPORT_ANDROID_SYNC)
 	PVRSyncDeviceDeInit();
 #endif
 
@@ -1327,9 +1313,7 @@ static void __exit PVRCore_Cleanup(void)
 
 /*S.LSI*/
 #if defined (PVR_LDM_PLATFORM_MODULE)
-#if defined(MODULE) && !defined(PVR_USE_PRE_REGISTERED_PLATFORM_DEV)
 	platform_device_unregister(&powervr_device);
-#endif
 	platform_driver_unregister(&powervr_driver);
 #endif
 

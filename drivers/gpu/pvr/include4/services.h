@@ -819,9 +819,8 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVMapDeviceMemory2(IMG_CONST PVRSRV_DEV_DATA	*psDe
 
 #if defined(SUPPORT_ION)
 PVRSRV_ERROR PVRSRVMapIonHandle(const PVRSRV_DEV_DATA *psDevData,
-								IMG_HANDLE hDevMemHeap,
-								IMG_UINT32 ui32NumFDs,
-								IMG_INT    *paiBufferFDs,
+								 IMG_HANDLE hDevMemHeap,
+								IMG_INT32 uiFD,
 								IMG_UINT32 ui32ChunkCount,
 								IMG_SIZE_T *pauiOffset,
 								IMG_SIZE_T *pauiSize,
@@ -980,11 +979,9 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVSwapToDCBuffer2 (IMG_HANDLE hDevice,
 										IMG_HANDLE hBuffer,
 										IMG_UINT32 ui32SwapInterval,
 										PVRSRV_CLIENT_MEM_INFO **ppsMemInfos,
-										PVRSRV_CLIENT_SYNC_INFO **ppsSyncInfos,
-										IMG_UINT32 ui32NumMemSyncInfos,
+										IMG_UINT32 ui32NumMemInfos,
 										IMG_PVOID  pvPrivData,
-										IMG_UINT32 ui32PrivDataLength,
-										IMG_HANDLE *phFence);
+										IMG_UINT32 ui32PrivDataLength);
 
 IMG_IMPORT
 PVRSRV_ERROR IMG_CALLCONV PVRSRVSwapToDCSystem (IMG_HANDLE hDevice,

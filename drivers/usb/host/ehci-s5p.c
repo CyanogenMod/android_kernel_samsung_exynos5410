@@ -314,8 +314,7 @@ int s5p_ehci_bus_suspend(struct usb_hcd *hcd)
 	ret = ehci_bus_suspend(hcd);
 
 	/* Decrease pm_count that was increased at s5p_ehci_resume func. */
-	if (hcd->self.controller->power.runtime_auto)
-		pm_runtime_put_noidle(hcd->self.controller);
+	pm_runtime_put_noidle(hcd->self.controller);
 
 	return ret;
 }
@@ -508,7 +507,8 @@ static ssize_t store_ehci_power(struct device *dev,
 		 * So, set the hub waiting 500ms autosuspend delay*/
 		if (hcd->self.root_hub)
 			pm_runtime_set_autosuspend_delay(
-				&hcd->self.root_hub->dev, 500);
+				&hcd->self.root_hub->dev,
+				msecs_to_jiffies(500));
 		/* mif allow the ehci runtime after enumeration */
 		pm_runtime_forbid(dev);
 #else

@@ -3485,9 +3485,6 @@ int dw_mci_resume(struct dw_mci *host)
 #if defined(CONFIG_MACH_JA_KOR_SKT) || defined(CONFIG_MACH_JA_KOR_KT) || defined(CONFIG_MACH_JA_KOR_LGT)
 	int cclk_disabled;
 #endif
-
-	host->current_speed = 0;
-
 	/* eMMC / SD power on and set GPIOs */
 	if (host->pdata->cfg_gpio) {
 		if (host->pdata->cd_type == DW_MCI_CD_PERMANENT)

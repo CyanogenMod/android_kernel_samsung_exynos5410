@@ -45,27 +45,6 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include "lists.h"
 #include "ttrace.h"
 
-#if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
-#include <linux/sw_sync.h>
-static struct sync_fence *AllocQueueFence(struct sw_sync_timeline *psTimeline, IMG_UINT32 ui32FenceValue, const char *szName)
-{
-	struct sync_fence *psFence = IMG_NULL;
-	struct sync_pt *psPt;
-
-	psPt = sw_sync_pt_create(psTimeline, ui32FenceValue);
-	if(psPt)
-	{
-		psFence = sync_fence_create(szName, psPt);
-		if(!psFence)
-		{
-			sync_pt_free(psPt);
-		}
-	}
-
-	return psFence;
-}
-#endif /* defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC) */
-
 /*
  * The number of commands of each type which can be in flight at once.
  */
@@ -127,7 +106,7 @@ void ProcSeqShowQueue(struct seq_file *sfile,void* el)
 	{
 		psCmd= (PVRSRV_COMMAND *)((IMG_UINTPTR_T)psQueue->pvLinQueueKM + uReadOffset);
 
-		seq_printf(sfile, "%p %p  %5u  %6u  %3" SIZE_T_FMT_LEN "u  %5u   %2u   %2u    %3" SIZE_T_FMT_LEN "u  \n",
+		seq_printf(sfile, "%p %p  %5u  %6u  %3u  %5u   %2u   %2u    %3u  \n",
 							psQueue,
 							psCmd,
 					 		psCmd->ui32ProcessID,
@@ -449,15 +428,6 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVCreateCommandQueueKM(IMG_SIZE_T uQueueSize,
 
 	psQueueInfo->uQueueSize = uPower2QueueSize;
 
-#if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
-	psQueueInfo->pvTimeline = sw_sync_timeline_create("pvr_queue_proc");
-	if(psQueueInfo->pvTimeline == IMG_NULL)
-	{
-		PVR_DPF((PVR_DBG_ERROR,"PVRSRVCreateCommandQueueKM: sw_sync_timeline_create() failed"));
-		goto ErrorExit;
-	}
-#endif
-
 	/* if this is the first q, create a lock resource for the q list */
 	if (psSysData->psQueueList == IMG_NULL)
 	{
@@ -564,10 +534,6 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVDestroyCommandQueueKM(PVRSRV_QUEUE_INFO *psQueue
 	{
 		goto ErrorExit;
 	}
-
-#if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
-	sync_timeline_destroy(psQueueInfo->pvTimeline);
-#endif
 
 	if(psQueue == psQueueInfo)
 	{
@@ -731,8 +697,7 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVInsertCommandKM(PVRSRV_QUEUE_INFO	*psQueue,
 												PVRSRV_KERNEL_SYNC_INFO	*apsSrcSync[],
 												IMG_SIZE_T			uDataByteSize,
 												PFN_QUEUE_COMMAND_COMPLETE pfnCommandComplete,
-												IMG_HANDLE			hCallbackData,
-												IMG_HANDLE			*phFence)
+												IMG_HANDLE			hCallbackData)
 {
 	PVRSRV_ERROR 	eError;
 	PVRSRV_COMMAND	*psCommand;
@@ -740,10 +705,6 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVInsertCommandKM(PVRSRV_QUEUE_INFO	*psQueue,
 	IMG_UINT32		i;
 	SYS_DATA *psSysData;
 	DEVICE_COMMAND_DATA *psDeviceCommandData;
-
-#if !defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
-	PVR_UNREFERENCED_PARAMETER(phFence);
-#endif
 
 	/* Check that we've got enough space in our command complete data for this command */
 	SysAcquireData(&psSysData);
@@ -770,45 +731,6 @@ PVRSRV_ERROR IMG_CALLCONV PVRSRVInsertCommandKM(PVRSRV_QUEUE_INFO	*psQueue,
 	{
 		return eError;
 	}
-
-#if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
-	if(phFence != IMG_NULL)
-	{
-		struct sync_fence *psRetireFence, *psCleanupFence;
-
-		/* New command? New timeline target */
-		psQueue->ui32FenceValue++;
-
-		psRetireFence = AllocQueueFence(psQueue->pvTimeline, psQueue->ui32FenceValue, "pvr_queue_retire");
-		if(!psRetireFence)
-		{
-			PVR_DPF((PVR_DBG_ERROR, "PVRSRVInsertCommandKM: sync_fence_create() failed"));
-			psQueue->ui32FenceValue--;
-			return PVRSRV_ERROR_INVALID_PARAMS;
-		}
-
-		/* This similar to the retire fence, except that it is destroyed
-		 * when a display command completes, rather than at the whim of
-		 * userspace. It is used to keep the timeline alive.
-		 */
-		psCleanupFence = AllocQueueFence(psQueue->pvTimeline, psQueue->ui32FenceValue, "pvr_queue_cleanup");
-		if(!psCleanupFence)
-		{
-			PVR_DPF((PVR_DBG_ERROR, "PVRSRVInsertCommandKM: sync_fence_create() #2 failed"));
-			sync_fence_put(psRetireFence);
-			psQueue->ui32FenceValue--;
-			return PVRSRV_ERROR_INVALID_PARAMS;
-		}
-
-		psCommand->pvCleanupFence = psCleanupFence;
-		psCommand->pvTimeline = psQueue->pvTimeline;
-		*phFence = psRetireFence;
-	}
-	else
-	{
-		psCommand->pvTimeline = IMG_NULL;
-	}
-#endif /* defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC) */
 
 	psCommand->ui32ProcessID	= OSGetCurrentProcessIDKM();
 
@@ -1125,11 +1047,6 @@ PVRSRV_ERROR PVRSRVProcessCommand(SYS_DATA			*psSysData,
 	psCmdCompleteData->pfnCommandComplete = psCommand->pfnCommandComplete;
 	psCmdCompleteData->hCallbackData = psCommand->hCallbackData;
 
-#if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
-	psCmdCompleteData->pvCleanupFence = psCommand->pvCleanupFence;
-	psCmdCompleteData->pvTimeline = psCommand->pvTimeline;
-#endif
-
 	/* copy dst updates over */
 	psCmdCompleteData->ui32SrcSyncCount = psCommand->ui32SrcSyncCount;
 	for (i=0; i<psCommand->ui32SrcSyncCount; i++)
@@ -1165,13 +1082,10 @@ PVRSRV_ERROR PVRSRVProcessCommand(SYS_DATA			*psSysData,
 		*/
 		psCmdCompleteData->bInUse = IMG_FALSE;
 		eError = PVRSRV_ERROR_CMD_NOT_PROCESSED;
-		PVR_LOG(("Failed to submit command from queue processor, this could cause sync wedge!"));
 	}
-	else
-	{
-		/* Increment the CCB offset */
-		psDeviceCommandData[psCommand->CommandType].ui32CCBOffset = (ui32CCBOffset + 1) % DC_NUM_COMMANDS_PER_TYPE;
-	}
+	
+	/* Increment the CCB offset */
+	psDeviceCommandData[psCommand->CommandType].ui32CCBOffset = (ui32CCBOffset + 1) % DC_NUM_COMMANDS_PER_TYPE;
 
 	return eError;
 }
@@ -1267,7 +1181,7 @@ PVRSRV_ERROR PVRSRVProcessQueues(IMG_BOOL	bFlush)
 /*!
 ******************************************************************************
 
- @Function	PVRSRVFreeCommandCompletePacketKM
+ @Function	PVRSRVCommandCompleteKM
 
  @Description	Updates non-private command complete sync objects
 
@@ -1371,14 +1285,6 @@ IMG_VOID PVRSRVCommandCompleteKM(IMG_HANDLE	hCmdCookie,
 		psCmdCompleteData->pfnCommandComplete(psCmdCompleteData->hCallbackData);
 	}
 
-#if defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC)
-	if(psCmdCompleteData->pvTimeline)
-	{
-		sw_sync_timeline_inc(psCmdCompleteData->pvTimeline, 1);
-		sync_fence_put(psCmdCompleteData->pvCleanupFence);
-	}
-#endif /* defined(PVR_ANDROID_NATIVE_WINDOW_HAS_SYNC) */
-
 	/* free command complete storage */
 	psCmdCompleteData->bInUse = IMG_FALSE;
 
@@ -1390,6 +1296,8 @@ IMG_VOID PVRSRVCommandCompleteKM(IMG_HANDLE	hCmdCookie,
 		OSScheduleMISR(psSysData);
 	}
 }
+
+
 
 
 /*!

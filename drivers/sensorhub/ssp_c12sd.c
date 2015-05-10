@@ -360,7 +360,8 @@ static int uv_probe(struct platform_device *pdev)
 		goto err_sensor_register_failed;
 	}
 
-	ret = sensors_create_symlink(uv->uv_input_dev);
+	ret = sensors_create_symlink(&uv->uv_input_dev->dev.kobj,
+		uv->uv_input_dev->name);
 	if (ret < 0) {
 		pr_err("%s, sensors_create_symlinks failed!(%d)\n",
 			__func__, ret);
@@ -410,7 +411,6 @@ static int uv_remove(struct platform_device *pdev)
 		cancel_work_sync(&uv->work_uv);
 	}
 	destroy_workqueue(uv->uv_wq);
-	sensors_remove_symlink(uv->uv_input_dev);
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 	unregister_early_suspend(&uv->early_suspend);
