@@ -24,6 +24,8 @@
 #include <linux/shrinker.h>
 #include "ion_priv.h"
 
+#include <linux/swap.h>
+
 /* #define DEBUG_PAGE_POOL_SHRINKER */
 
 static struct plist_head pools = PLIST_HEAD_INIT(pools);
@@ -204,6 +206,9 @@ static int ion_page_pool_shrink(struct shrinker *shrinker,
 	int nr_to_scan = sc->nr_to_scan;
 
 	if (sc->gfp_mask & __GFP_HIGHMEM)
+		high = true;
+
+	if (current_is_kswapd())
 		high = true;
 
 	if (nr_to_scan == 0)

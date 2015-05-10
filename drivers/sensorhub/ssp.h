@@ -34,12 +34,12 @@
 #include <linux/delay.h>
 #include <linux/firmware.h>
 #include <linux/timer.h>
+#include <linux/alarmtimer.h>
 
 #ifdef CONFIG_SENSORS_SSP_SENSORHUB
 #include "ssp_sensorhub.h"
 #endif
 
-#define FEATURE_STEP_SENSOR
 #define SSP_DBG		1
 
 #define SUCCESS		1
@@ -102,7 +102,7 @@ enum {
 enum {
 	SENSOR_NS_DELAY_FASTEST = 10000000,	/* 10msec */
 	SENSOR_NS_DELAY_GAME = 20000000,	/* 20msec */
-	SENSOR_NS_DELAY_UI = 66700000,		/* 66.7msec */
+	SENSOR_NS_DELAY_UI = 66667000,		/* 66.667msec */
 	SENSOR_NS_DELAY_NORMAL = 200000000,	/* 200msec */
 };
 
@@ -160,7 +160,7 @@ enum {
 /* ioctl command */
 #define AKMIO				0xA1
 #define ECS_IOCTL_GET_FUSEROMDATA	_IOR(AKMIO, 0x01, unsigned char[3])
-#define ECS_IOCTL_GET_MAGDATA	        _IOR(AKMIO, 0x02, unsigned char[8])
+#define ECS_IOCTL_GET_MAGDATA	        _IOR(AKMIO, 0x02, unsigned char[16])
 #define ECS_IOCTL_GET_ACCDATA	        _IOR(AKMIO, 0x03, int[3])
 
 /* AP -> SSP Instruction */
@@ -227,6 +227,11 @@ enum {
 #define MAX_GYRO		32767
 #define MIN_GYRO		-32768
 
+/* report timestamp from kernel (for Android L) */
+#define TIME_LO_MASK 0x00000000FFFFFFFF
+#define TIME_HI_MASK 0xFFFFFFFF00000000
+#define TIME_HI_SHIFT 32
+
 /* SSP_INSTRUCTION_CMD */
 enum {
 	REMOVE_SENSOR = 0,
@@ -251,10 +256,8 @@ enum {
 	PROXIMITY_RAW,
 	ORIENTATION_SENSOR,
 	SIG_MOTION_SENSOR,
-#ifdef FEATURE_STEP_SENSOR
 	STEP_DETECTOR,
 	STEP_COUNTER,
-#endif
 	SENSOR_MAX,
 };
 
@@ -283,6 +286,8 @@ enum {
 	SHTC1_CMD_RESET,
 };
 
+#define META_DATA_FLUSH_COMPLETE 1
+
 struct sensor_value {
 	union {
 		struct {
@@ -300,11 +305,10 @@ struct sensor_value {
 		s16 data[5];
 		s32 pressure[3];
 		u8 sig_motion;
-#ifdef FEATURE_STEP_SENSOR
 		u8 step_det;
 		u32 step_diff;
-#endif
 	};
+	u64 timestamp;
 };
 
 extern struct class *sensors_event_class;
@@ -313,6 +317,11 @@ struct calibraion_data {
 	s16 x;
 	s16 y;
 	s16 z;
+};
+
+struct ssp_time_diff {
+	u64 time_diff;
+	u64 irq_diff;
 };
 
 struct ssp_data {
@@ -325,10 +334,9 @@ struct ssp_data {
 	struct input_dev *prox_input_dev;
 	struct input_dev *temp_humi_input_dev;
 	struct input_dev *sig_motion_input_dev;
-#ifdef FEATURE_STEP_SENSOR
 	struct input_dev *step_det_input_dev;
 	struct input_dev *step_cnt_input_dev;
-#endif
+	struct input_dev *meta_input_dev;
 
 	struct device *mcu_device;
 	struct device *acc_device;
@@ -389,12 +397,12 @@ struct ssp_data {
 	unsigned int uFactorydataReady;
 	s32 iPressureCal;
 	unsigned int uTempCount;
-#ifdef FEATURE_STEP_SENSOR
 	u64 step_count_total;
-#endif
 
 	atomic_t aSensorEnable;
 	int64_t adDelayBuf[SENSOR_MAX];
+	u64 lastTimestamp[SENSOR_MAX];
+	u64 timestamp;
 
 	int (*wakeup_mcu)(void);
 	int (*check_mcu_ready)(void);
@@ -435,6 +443,7 @@ int ssp_i2c_read(struct ssp_data *, char *, u16, char *, u16, int);
 void toggle_mcu_reset(struct ssp_data *);
 int initialize_mcu(struct ssp_data *);
 int initialize_input_dev(struct ssp_data *);
+int initialize_meta_dev(struct ssp_data *);
 int initialize_sysfs(struct ssp_data *);
 void initialize_accel_factorytest(struct ssp_data *);
 void initialize_prox_factorytest(struct ssp_data *);
@@ -498,10 +507,8 @@ void report_prox_raw_data(struct ssp_data *, struct sensor_value *);
 int print_mcu_debug(char *, int *, int);
 void report_temp_humidity_data(struct ssp_data *, struct sensor_value *);
 void report_sig_motion_data(struct ssp_data *, struct sensor_value *);
-#ifdef FEATURE_STEP_SENSOR
 void report_step_det_data(struct ssp_data *, struct sensor_value *);
 void report_step_cnt_data(struct ssp_data *, struct sensor_value *);
-#endif
 unsigned int get_module_rev(struct ssp_data *data);
 void reset_mcu(struct ssp_data *);
 void convert_acc_data(s16 *);

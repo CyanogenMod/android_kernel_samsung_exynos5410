@@ -23,6 +23,8 @@
 #include <linux/battery/sec_charging_common.h>
 #if defined(ANDROID_ALARM_ACTIVATED)
 #include <linux/android_alarm.h>
+#else
+#include <linux/alarmtimer.h>
 #endif
 #include <linux/alarmtimer.h>
 #include <linux/wakelock.h>

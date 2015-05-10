@@ -78,7 +78,7 @@ struct sii8240_platform_data {
 #if defined(__MHL_NEW_CBUS_MSC_CMD__)
 	void (*vbus_present)(bool on, int value);
 #else
-	void (*vbus_present)(bool on);
+	bool (*vbus_present)(void);
 #endif
 #ifdef CONFIG_SAMSUNG_MHL_UNPOWERED
 	int (*get_vbus_status)(void);

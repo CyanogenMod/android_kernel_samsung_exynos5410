@@ -26,11 +26,17 @@
 #include <linux/vmalloc.h>
 #include "ion_priv.h"
 
-static unsigned int high_order_gfp_flags = (GFP_HIGHUSER | __GFP_ZERO |
+#define CONFIG_QUICK_ALLOC_FOR_FRAGMENTATION
+
+static unsigned int high_order_gfp_flags = (GFP_HIGHUSER |
 					    __GFP_NOWARN | __GFP_NORETRY |
 					    __GFP_NO_KSWAPD) & ~__GFP_WAIT;
-static unsigned int low_order_gfp_flags  = (GFP_HIGHUSER | __GFP_ZERO |
+static unsigned int low_order_gfp_flags  = (GFP_HIGHUSER |
 					 __GFP_NOWARN);
+#if defined(CONFIG_QUICK_ALLOC_FOR_FRAGMENTATION)
+static unsigned int low_order_frag_gfp_flags  = (GFP_HIGHUSER |
+					 __GFP_NOWARN | __GFP_NO_KSWAPD) & ~GFP_IOFS;
+#endif
 static const unsigned int orders[] = {4, 1, 0};
 static const int num_orders = ARRAY_SIZE(orders);
 static int order_to_index(unsigned int order)
@@ -59,22 +65,42 @@ struct page_info {
 	struct list_head list;
 };
 
+#if !defined(CONFIG_QUICK_ALLOC_FOR_FRAGMENTATION)
 static struct page *alloc_buffer_page(struct ion_system_heap *heap,
 				      struct ion_buffer *buffer,
 				      unsigned long order)
+#else /* CONFIG_QUICK_ALLOC_FOR_FRAGMENTATION */
+static struct page *alloc_buffer_page(struct ion_system_heap *heap,
+				      struct ion_buffer *buffer,
+				      unsigned long order, int frag)
+#endif
 {
 	bool cached = ion_buffer_cached(buffer);
 	bool split_pages = ion_buffer_fault_user_mappings(buffer);
 	struct ion_page_pool *pool = heap->pools[order_to_index(order)];
 	struct page *page;
 
+#if defined(CONFIG_QUICK_ALLOC_FOR_FRAGMENTATION)
+	gfp_t gfp_flags = low_order_gfp_flags;
+
+	if (frag) {
+		gfp_flags = low_order_frag_gfp_flags;
+	} else {
+		if (order > 0)
+			gfp_flags = high_order_gfp_flags;
+	}
+	pool->gfp_mask = gfp_flags;
+
+#endif
 	if (!cached) {
 		page = ion_page_pool_alloc(pool);
 	} else {
+#if !defined(CONFIG_QUICK_ALLOC_FOR_FRAGMENTATION)
 		gfp_t gfp_flags = low_order_gfp_flags;
 
-		if (order > 1)
+		if (order > 0)
 			gfp_flags = high_order_gfp_flags;
+#endif
 		page = alloc_pages(gfp_flags, order);
 		if (!page)
 			return 0;
@@ -135,6 +161,9 @@ static struct page_info *alloc_largest_available(struct ion_system_heap *heap,
 	struct page *page;
 	struct page_info *info;
 	int i;
+#if defined(CONFIG_QUICK_ALLOC_FOR_FRAGMENTATION)
+	int fragstate = 0;
+#endif
 
 	for (i = 0; i < num_orders; i++) {
 		if (size < order_to_size(orders[i]))
@@ -142,9 +171,17 @@ static struct page_info *alloc_largest_available(struct ion_system_heap *heap,
 		if (max_order < orders[i])
 			continue;
 
+#if !defined(CONFIG_QUICK_ALLOC_FOR_FRAGMENTATION)
 		page = alloc_buffer_page(heap, buffer, orders[i]);
 		if (!page)
 			continue;
+#else /* CONFIG_QUICK_ALLOC_FOR_FRAGMENTATION */
+		page = alloc_buffer_page(heap, buffer, orders[i], fragstate);
+		if (!page) {
+			if (i > 0) fragstate++; /* absence of high order */
+			continue;
+		}
+#endif
 
 		info = kmalloc(sizeof(struct page_info), GFP_KERNEL);
 		info->page = page;
@@ -391,7 +428,7 @@ struct ion_heap *ion_system_heap_create(struct ion_platform_heap *unused)
 		struct ion_page_pool *pool;
 		gfp_t gfp_flags = low_order_gfp_flags;
 
-		if (orders[i] > 1)
+		if (orders[i] > 0)
 			gfp_flags = high_order_gfp_flags;
 		pool = ion_page_pool_create(gfp_flags, orders[i]);
 		if (!pool)

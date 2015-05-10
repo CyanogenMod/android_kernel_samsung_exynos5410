@@ -78,7 +78,7 @@ static inline int pixel2offset(int x1, int bpp)
 	return (x1 * bpp) >> 3;
 }
 
-inline int width2bytes(int width, int bpp)
+int width2bytes(int width, int bpp)
 {
 	switch (bpp) {
 	case 32:
@@ -506,7 +506,7 @@ static int fimg2d_check_dma_sync(struct fimg2d_bltcmd *cmd)
 		if (!c->size)
 			continue;
 
-		pt = fimg2d_check_pagetable(mm, c->addr, c->size);
+		pt = fimg2d_check_pagetable(mm, c->addr, c->size, i == IDST);
 		if (pt == PT_FAULT) {
 			ret = -EFAULT;
 			goto err_pgtable;
@@ -545,7 +545,7 @@ int fimg2d_check_pgd(struct mm_struct *mm, struct fimg2d_bltcmd *cmd)
 		if (!c->size)
 			continue;
 
-		pt = fimg2d_check_pagetable(mm, c->addr, c->size);
+		pt = fimg2d_check_pagetable(mm, c->addr, c->size, i == IDST);
 		if (pt == PT_FAULT) {
 			ret = -EFAULT;
 			goto err_pgtable;

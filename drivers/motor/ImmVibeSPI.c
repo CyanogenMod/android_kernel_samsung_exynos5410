@@ -172,45 +172,21 @@ IMMVIBESPIAPI VibeStatus ImmVibeSPI_ForceOut_Terminate(void)
 /*
 ** Called by the real-time loop to set PWM duty cycle
 */
+static bool g_bOutputDataBufferEmpty = 1;
+
 IMMVIBESPIAPI VibeStatus ImmVibeSPI_ForceOut_SetSamples(VibeUInt8 nActuatorIndex,
 							VibeUInt16 nOutputSignalBitDepth,
 							VibeUInt16 nBufferSizeInBytes,
 							VibeInt8 * pForceOutputBuffer)
 {
-#if 0
 	VibeInt8 nForce;
 
-	switch (nOutputSignalBitDepth) {
-	case 8:
-		/* pForceOutputBuffer is expected to contain 1 byte */
-		if (nBufferSizeInBytes != 1) {
-			DbgOut((KERN_ERR "[ImmVibeSPI] ImmVibeSPI_ForceOut_SetSamples nBufferSizeInBytes =  %d\n", nBufferSizeInBytes));
-			return VIBE_E_FAIL;
-		}
-		nForce = pForceOutputBuffer[0];
-		break;
-	case 16:
-		/* pForceOutputBuffer is expected to contain 2 byte */
-		if (nBufferSizeInBytes != 2)
-			return VIBE_E_FAIL;
-
-		/* Map 16-bit value to 8-bit */
-		nForce = ((VibeInt16 *)pForceOutputBuffer)[0] >> 8;
-		break;
-	default:
-		/* Unexpected bit depth */
-		return VIBE_E_FAIL;
+	if (g_bOutputDataBufferEmpty) {
+		nActuatorIndex = 0;
+		nOutputSignalBitDepth = 8;
+		nBufferSizeInBytes = 1;
+		pForceOutputBuffer[0] = 0;
 	}
-
-	if (nForce == 0)
-		/* Set 50% duty cycle or disable amp */
-	else
-		/* Map force from [-127, 127] to [0, PWM_DUTY_MAX] */
-
-
-#endif
-
-	VibeInt8 nForce;
 
 	switch (nOutputSignalBitDepth) {
 	case 8:
@@ -239,10 +215,11 @@ IMMVIBESPIAPI VibeStatus ImmVibeSPI_ForceOut_SetSamples(VibeUInt8 nActuatorIndex
 		ImmVibeSPI_ForceOut_AmpDisable(0);
 	} else {
 		/* Map force from [-127, 127] to [0, PWM_DUTY_MAX] */
-		ImmVibeSPI_ForceOut_AmpEnable(0);
 #if !defined(CONFIG_MACH_P4NOTE)
 		vibtonz_pwm(nForce);
 #endif
+		ImmVibeSPI_ForceOut_AmpEnable(0);
+
 	}
 
 	return VIBE_S_SUCCESS;

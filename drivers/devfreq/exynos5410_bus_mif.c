@@ -34,6 +34,7 @@
 
 #include "noc_probe.h"
 #include "exynos5410_volt_ctrl.h"
+#include <mach/sec_debug.h>
 
 #ifdef CONFIG_ASV_MARGIN_TEST
 static int set_mif_freq = 0;
@@ -604,6 +605,11 @@ static int exynos5_mif_busfreq_target(struct device *dev,
 		exynos5_mif_set_drex(freq);
 
 		exynos5_mif_bpll_transition_notify(&info, MIF_DEVFREQ_PRECHANGE);
+
+		sec_debug_aux_log(SEC_DEBUG_AUXLOG_CPU_CLOCK_SWITCH_CHANGE,
+			"[MIF] old:%7d new:%7d",
+			old_freq, freq);
+
 		exynos5_mif_set_freq(freq);
 		exynos5_mif_bpll_transition_notify(&info, MIF_DEVFREQ_POSTCHANGE);
 
@@ -614,6 +620,11 @@ static int exynos5_mif_busfreq_target(struct device *dev,
 			exynos5_clkm_gate(false);
 
 		exynos5_mif_bpll_transition_notify(&info, MIF_DEVFREQ_PRECHANGE);
+
+		sec_debug_aux_log(SEC_DEBUG_AUXLOG_CPU_CLOCK_SWITCH_CHANGE,
+			"[MIF] old:%7d new:%7d",
+			old_freq, freq);
+
 		exynos5_mif_set_freq(freq);
 		exynos5_mif_bpll_transition_notify(&info, MIF_DEVFREQ_POSTCHANGE);
 
@@ -1077,14 +1088,14 @@ static int exynos5_bus_mif_tmu_notifier(struct notifier_block *notifier,
 		break;
 	case MEM_TH_LV2:
 		/*
-		 * In case of temperature increment, set MIF level 200Mhz as minimum
+		 * In case of temperature increment, set MIF level 400Mhz as minimum
 		 * before changing dram refresh counter.
 		 */
-		if (*on < TMU_109) {
+		if (*on < MEM_TH_LV2) {
 			if (pm_qos_request_active(&min_mif_thermal_qos))
-				pm_qos_update_request(&min_mif_thermal_qos, 200000);
+				pm_qos_update_request(&min_mif_thermal_qos, 400000);
 			else
-				pm_qos_add_request(&min_mif_thermal_qos, PM_QOS_BUS_THROUGHPUT, 200000);
+				pm_qos_add_request(&min_mif_thermal_qos, PM_QOS_BUS_THROUGHPUT, 400000);
 		}
 
 		exynos_smc(SMC_CMD_REG, SMC_REG_ID_SFR_W(EXYNOS5_PA_DREXI_0 + DREX_TIMINGAREF),
@@ -1092,16 +1103,18 @@ static int exynos5_bus_mif_tmu_notifier(struct notifier_block *notifier,
 		exynos_smc(SMC_CMD_REG, SMC_REG_ID_SFR_W(EXYNOS5_PA_DREXI_1 + DREX_TIMINGAREF),
 				AREF_HOT, 0);
 
+#if 0 // In case LV2 and LV3, Set MIF level 400Mhz as minimum
 		/*
 		 * In case of temperature decrement, set MIF level 200Mhz as minimum
 		 * after changing dram refresh counter.
 		 */
-		if (*on > TMU_109) {
+		if (*on > MEM_TH_LV2) {
 			if (pm_qos_request_active(&min_mif_thermal_qos))
 				pm_qos_update_request(&min_mif_thermal_qos, 200000);
 			else
 				pm_qos_add_request(&min_mif_thermal_qos, PM_QOS_BUS_THROUGHPUT, 200000);
 		}
+#endif
 
 		break;
 	case MEM_TH_LV3:

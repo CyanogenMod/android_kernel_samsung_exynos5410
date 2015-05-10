@@ -40,6 +40,9 @@
 #include <mach/gpio-exynos.h>
 
 #include "ice4_fpga.h"
+#if defined(CONFIG_ICE4_FPGA_RDA)
+#include "ice4_fpga_rda.h"
+#endif
 
 #if defined(TEST_DEBUG)
 #define pr_barcode	pr_emerg
@@ -64,6 +67,8 @@
 #define MAX_SIZE		2048
 #define READ_LENGTH		8
 #endif
+
+#define US_TO_PATTERN		1000000
 
 struct ice4_fpga_data {
 	struct i2c_client		*client;
@@ -124,6 +129,40 @@ static int barcode_send_firmware_data(unsigned char *data)
 	}
 	return 0;
 }
+#if defined(CONFIG_ICE4_FPGA_RDA)
+static int barcode_send_firmware_data_rda(unsigned char *data)
+{
+	unsigned int i,j;
+	unsigned char spibit;
+
+	i=0;
+	while (i < CONFIGURATION_SIZE_RDA) {
+		j=0;
+		spibit = data[i];
+		while (j < 8) {
+			gpio_set_value(GPIO_FPGA_SPI_CLK, GPIO_LEVEL_LOW);
+
+			if (spibit & 0x80) {
+				gpio_set_value(GPIO_FPGA_SPI_SI,GPIO_LEVEL_HIGH);
+			} else {
+				gpio_set_value(GPIO_FPGA_SPI_SI,GPIO_LEVEL_LOW);
+			}
+			j = j+1;
+			gpio_set_value(GPIO_FPGA_SPI_CLK, GPIO_LEVEL_HIGH);
+			spibit = spibit<<1;
+		}
+		i = i+1;
+	}
+
+	i = 0;
+	while (i < 200) {
+		gpio_set_value(GPIO_FPGA_SPI_CLK, GPIO_LEVEL_LOW);
+		i = i+1;
+		gpio_set_value(GPIO_FPGA_SPI_CLK, GPIO_LEVEL_HIGH);
+	}
+	return 0;
+}
+#endif
 
 static int check_fpga_cdone(void)
 {
@@ -161,8 +200,11 @@ static int barcode_fpga_fimrware_update_start(unsigned char *data)
 		usleep_range(10, 20);
 		barcode_send_firmware_data(data);
 		usleep_range(50, 60);
-
+#if defined(CONFIG_ICE4_FPGA_RDA)
+		if (retry_count >= 0) {
+#else
 		if (retry_count > 9) {
+#endif
 			pr_barcode("barcode firmware update is NOT loaded\n");
 			break;
 		} else {
@@ -182,9 +224,72 @@ static int barcode_fpga_fimrware_update_start(unsigned char *data)
 	return 0;
 }
 
+#if defined(CONFIG_ICE4_FPGA_RDA)
+static int barcode_fpga_fimrware_update_start_rda(unsigned char *data)
+{
+	int retry_count = 0;
+
+	pr_barcode("%s\n", __func__);
+
+	gpio_request_one(GPIO_FPGA_CDONE, GPIOF_IN, "FPGA_CDONE");
+	gpio_request_one(GPIO_FPGA_SPI_CLK, GPIOF_OUT_INIT_LOW, "FPGA_SPI_CLK");
+	gpio_request_one(GPIO_FPGA_SPI_SI, GPIOF_OUT_INIT_LOW, "FPGA_SPI_SI");
+	gpio_request_one(GPIO_FPGA_SPI_EN, GPIOF_OUT_INIT_LOW, "FPGA_SPI_EN");
+	gpio_request_one(GPIO_FPGA_CRESET_B, GPIOF_OUT_INIT_HIGH, "FPGA_CRESET_B");
+	gpio_request_one(GPIO_FPGA_RST_N, GPIOF_OUT_INIT_LOW, "FPGA_RST_N");
+
+	gpio_set_value(GPIO_FPGA_CRESET_B, GPIO_LEVEL_LOW);
+	usleep_range(30, 40);
+
+	gpio_set_value(GPIO_FPGA_CRESET_B, GPIO_LEVEL_HIGH);
+	usleep_range(1000, 1100);
+
+	while(!check_fpga_cdone()) {
+		usleep_range(10, 20);
+		barcode_send_firmware_data_rda(data);
+		usleep_range(50, 60);
+
+		if (retry_count >= 0) {
+			pr_barcode("barcode firmware update is NOT loaded\n");
+			break;
+		} else {
+			retry_count++;
+		}
+	}
+
+	if (check_fpga_cdone()) {
+		gpio_set_value(GPIO_FPGA_RST_N, GPIO_LEVEL_HIGH);
+		pr_barcode("barcode firmware update success\n");
+		fw_loaded = 1;
+	} else {
+		pr_barcode("Finally, fail to update barcode firmware!\n");
+	}
+
+	gpio_free(GPIO_FPGA_SPI_SI);
+	gpio_free(GPIO_FPGA_SPI_CLK);
+	return 0;
+}
+#endif
+
 void barcode_fpga_firmware_update(void)
 {
+#if defined(CONFIG_ICE4_FPGA_RDA)
+	int retry_count = 0;
+
+	while(!check_fpga_cdone()) {
+		barcode_fpga_fimrware_update_start(spiword);
+		if(!check_fpga_cdone())
+			barcode_fpga_fimrware_update_start_rda(spiword_rda);
+		if (retry_count > 9) {
+			pr_barcode("barcode firmware update is NOT loaded\n");
+			break;
+		} else {
+			retry_count++;
+		}
+	}
+#else
 	barcode_fpga_fimrware_update_start(spiword);
+#endif
 }
 
 static ssize_t barcode_emul_store(struct device *dev, struct device_attribute *attr,
@@ -226,6 +331,9 @@ static ssize_t barcode_emul_fw_update_store(struct device *dev, struct device_at
 	struct file *fp = NULL;
 	long fsize = 0, nread = 0;
 	const u8 *buff = 0;
+#if defined(CONFIG_ICE4_FPGA_RDA)
+	int retry_count = 0;
+#endif
 	char fw_path[BARCODE_EMUL_MAX_FW_PATH+1];
 	mm_segment_t old_fs = get_fs();
 
@@ -263,7 +371,22 @@ static ssize_t barcode_emul_fw_update_store(struct device *dev, struct device_at
 		goto err_fw_size;
 	}
 
+#if defined(CONFIG_ICE4_FPGA_RDA)
+//	barcode_fpga_fimrware_update_start((unsigned char *)buff);
+	while(1) {
+		barcode_fpga_fimrware_update_start((unsigned char *)buff);
+		if(!check_fpga_cdone())
+			barcode_fpga_fimrware_update_start_rda((unsigned char *)buff);
+		if (retry_count > 9) {
+			pr_barcode("barcode firmware update is NOT loaded\n");
+			break;
+		} else {
+			retry_count++;
+		}
+	}
+#else
 	barcode_fpga_fimrware_update_start((unsigned char *)buff);
+#endif
 
 err_fw_size:
 	kfree(buff);
@@ -641,8 +764,8 @@ static ssize_t remocon_store(struct device *dev, struct device_attribute *attr,
 		const char *buf, size_t size)
 {
 	struct ice4_fpga_data *data = dev_get_drvdata(dev);
-	unsigned int _data;
-	int count, i;
+	unsigned int _data, _tdata;
+	int count, i, converting_factor = 1;
 
 	printk(KERN_INFO "%s : ir_send called\n", __func__);
 	if (!fw_loaded) {
@@ -655,8 +778,10 @@ static ssize_t remocon_store(struct device *dev, struct device_attribute *attr,
 			if (_data == 0 || buf == '\0')
 				break;
 
+			// 2 is the initial value of count
 			if (data->count == 2) {
 				data->ir_freq = _data;
+				converting_factor = US_TO_PATTERN / data->ir_freq;
 				data->i2c_block_transfer.data[2] = _data >> 16;
 				data->i2c_block_transfer.data[3]
 							= (_data >> 8) & 0xFF;
@@ -664,12 +789,13 @@ static ssize_t remocon_store(struct device *dev, struct device_attribute *attr,
 
 				data->count += 3;
 			} else {
-				data->ir_sum += _data;
+				_tdata = _data / converting_factor;
+				data->ir_sum += _tdata;
 				count = data->count;
 				data->i2c_block_transfer.data[count]
-								= _data >> 8;
+								= _tdata >> 8;
 				data->i2c_block_transfer.data[count+1]
-								= _data & 0xFF;
+								= _tdata & 0xFF;
 				data->count += 2;
 			}
 

@@ -80,6 +80,15 @@ enum debug_level {
 #define FIMG2D_BITBLT_VERSION	_IOR(FIMG2D_IOCTL_MAGIC, 2, struct fimg2d_version)
 #define FIMG2D_BITBLT_ACTIVATE	_IOW(FIMG2D_IOCTL_MAGIC, 3, enum driver_act)
 
+enum fimg2d_qos_level {
+	G2D_LV0 = 0,
+	G2D_LV1,
+	G2D_LV2,
+	G2D_LV3,
+	G2D_LV4,
+	G2D_LV_END
+};
+
 enum driver_act {
 	DRV_ACT = 0,
 	DRV_DEACT
@@ -419,6 +428,7 @@ struct fimg2d_blit {
 	struct fimg2d_image *dst;
 	enum blit_sync sync;
 	unsigned int seq_no;
+	enum fimg2d_qos_level qos_lv;
 };
 
 #ifdef __KERNEL__
@@ -523,7 +533,7 @@ struct fimg2d_control {
 int fimg2d_register_ops(struct fimg2d_control *ctrl);
 int fimg2d_ip_version_is(void);
 int bit_per_pixel(struct fimg2d_image *img, int plane);
-inline int width2bytes(int width, int bpp);
+int width2bytes(int width, int bpp);
 
 #ifdef BLIT_WORKQUE
 #define g2d_lock(x)		do {} while (0)

@@ -529,6 +529,19 @@ static int check_reset_complete (
 			return port_status;
 		}
 
+#if defined(CONFIG_MDM_HSIC_PM)
+		/* W/A for Synopsys HC HSIC port.
+		 * Return at this point to prevent port owner change
+		 * and retry port reset.
+		 */
+		if ((index + 1) == 2) {
+			ehci_err (ehci,
+					"Failed to enable HSIC port %d\n",
+					index + 1);
+			return port_status;
+		}
+#endif
+
 		ehci_dbg (ehci, "port %d full speed --> companion\n",
 			index + 1);
 
@@ -1042,6 +1055,18 @@ static int ehci_hub_control (
 				temp |= PORT_OWNER;
 			} else {
 				ehci_vdbg (ehci, "port %d reset\n", wIndex + 1);
+
+#if defined(CONFIG_MDM_HSIC_PM)
+				/* W/A for Synopsys HC HSIC port.
+				 * Disable HSIC port to prevent
+				 * the port reset failure.
+				 */
+				if ((wIndex + 1) == 2)
+					ehci_writel(ehci,
+							temp & ~PORT_PE,
+							status_reg);
+#endif
+
 				temp |= PORT_RESET;
 				temp &= ~PORT_PE;
 

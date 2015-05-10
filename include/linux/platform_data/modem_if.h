@@ -814,7 +814,7 @@ struct modem_data {
 	void (*gpio_revers_bias_restore)(void);
 };
 
-#define MODEM_BOOT_DEV_SPI "modem_boot_spi"
+#define MODEM_BOOT_DEV_SPI "spi_boot_link"
 
 struct modem_boot_spi_platform_data {
 	const char *name;

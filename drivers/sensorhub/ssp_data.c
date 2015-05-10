@@ -36,6 +36,37 @@
 /* SSP parsing the dataframe                                             */
 /*************************************************************************/
 
+static void get_timestamp(struct ssp_data *data, int iSensorData,
+	struct sensor_value *sensorsdata, struct ssp_time_diff *sensortime)
+{
+	if ((iSensorData == PROXIMITY_SENSOR) || (iSensorData == GESTURE_SENSOR)
+		|| (iSensorData == STEP_DETECTOR) || (iSensorData == SIG_MOTION_SENSOR)
+		|| (iSensorData == STEP_COUNTER)) {
+		sensorsdata->timestamp = data->timestamp;
+		return;
+	}
+	if (((sensortime->irq_diff * 10) >
+		(data->adDelayBuf[iSensorData] * 18))
+		&& ((sensortime->irq_diff * 10) <
+		(data->adDelayBuf[iSensorData] * 100))) {
+		u64 move_timestamp;
+		u64 shift_timestamp =
+			div64_long(data->adDelayBuf[iSensorData], 2);
+		for (move_timestamp = data->lastTimestamp[iSensorData] +
+			data->adDelayBuf[iSensorData];
+			move_timestamp < (data->timestamp - shift_timestamp);
+			move_timestamp += data->adDelayBuf[iSensorData]) {
+			sensorsdata->timestamp = move_timestamp;
+			data->report_sensor_data[iSensorData](data,
+				sensorsdata);
+		}
+	}
+	else if (((sensortime->irq_diff * 10) >= (data->adDelayBuf[iSensorData] * 100))) {
+		pr_info("[%s][irqdiff=%llu] Event time diff is too large for %d sensor\n", __func__, sensortime->irq_diff, iSensorData);
+	}
+	sensorsdata->timestamp = data->timestamp;
+}
+
 static void get_3axis_sensordata(char *pchRcvDataFrame, int *iDataIdx,
 	struct sensor_value *sensorsdata)
 {
@@ -214,7 +245,6 @@ static void get_sig_motion_sensordata(char *pchRcvDataFrame, int *iDataIdx,
 	sensorsdata->sig_motion = (u8)pchRcvDataFrame[(*iDataIdx)++];
 }
 
-#ifdef FEATURE_STEP_SENSOR
 static void get_step_det_sensordata(char *pchRcvDataFrame, int *iDataIdx,
 	struct sensor_value *sensorsdata)
 {
@@ -238,12 +268,12 @@ static void get_step_cnt_sensordata(char *pchRcvDataFrame, int *iDataIdx,
 	iTemp += pchRcvDataFrame[(*iDataIdx)++];
 	sensorsdata->step_diff = iTemp;
 }
-#endif
 
 int parse_dataframe(struct ssp_data *data, char *pchRcvDataFrame, int iLength)
 {
 	int iDataIdx, iSensorData;
 	struct sensor_value *sensorsdata;
+	struct ssp_time_diff sensortime;
 
 	sensorsdata = kzalloc(sizeof(*sensorsdata), GFP_KERNEL);
 	if (sensorsdata == NULL)
@@ -260,11 +290,29 @@ int parse_dataframe(struct ssp_data *data, char *pchRcvDataFrame, int iLength)
 				kfree(sensorsdata);
 				return ERROR;
 			}
-
+			sensortime.irq_diff = data->timestamp -
+				data->lastTimestamp[iSensorData];
 			data->get_sensor_data[iSensorData](pchRcvDataFrame,
 				&iDataIdx, sensorsdata);
-			data->report_sensor_data[iSensorData](data,
-				sensorsdata);
+			get_timestamp(data, iSensorData, sensorsdata,
+				&sensortime);
+
+			if (sensortime.irq_diff > 1000000)
+				data->report_sensor_data[iSensorData](data,
+					sensorsdata);
+				else if ((iSensorData == PROXIMITY_SENSOR) ||
+				(iSensorData == PROXIMITY_RAW) ||
+				(iSensorData == GESTURE_SENSOR) ||
+				(iSensorData == SIG_MOTION_SENSOR) ||
+				(iSensorData == STEP_DETECTOR) ||
+				(iSensorData == STEP_COUNTER))
+				data->report_sensor_data[iSensorData](data,
+					sensorsdata);
+			else
+				pr_info("[SSP]: %s irq_diff is under 1ms(%d)\n",
+					__func__, iSensorData);
+
+			data->lastTimestamp[iSensorData] = data->timestamp;
 		} else if (pchRcvDataFrame[iDataIdx] ==
 			MSG2AP_INST_SELFTEST_DATA) {
 			iDataIdx++;
@@ -317,12 +365,10 @@ void initialize_function_pointer(struct ssp_data *data)
 		get_temp_humidity_sensordata;
 	data->get_sensor_data[SIG_MOTION_SENSOR] =
 		get_sig_motion_sensordata;
-#ifdef FEATURE_STEP_SENSOR
 	data->get_sensor_data[STEP_DETECTOR] =
 		get_step_det_sensordata;
 	data->get_sensor_data[STEP_COUNTER] =
 		get_step_cnt_sensordata;
-#endif
 
 	data->report_sensor_data[ACCELEROMETER_SENSOR] = report_acc_data;
 	data->report_sensor_data[GYROSCOPE_SENSOR] = report_gyro_data;
@@ -335,8 +381,6 @@ void initialize_function_pointer(struct ssp_data *data)
 	data->report_sensor_data[TEMPERATURE_HUMIDITY_SENSOR] =
 		report_temp_humidity_data;
 	data->report_sensor_data[SIG_MOTION_SENSOR] = report_sig_motion_data;
-#ifdef FEATURE_STEP_SENSOR
 	data->report_sensor_data[STEP_DETECTOR] = report_step_det_data;
 	data->report_sensor_data[STEP_COUNTER] = report_step_cnt_data;
-#endif
 }

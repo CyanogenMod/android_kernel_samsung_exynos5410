@@ -40,3 +40,12 @@ config DIAG_HSIC_PIPE
 	help
 	 HSIC Transport Layer for DIAG Router
 endmenu
+
+menu "Debug support for DIAG"
+
+config DIAG_MODE
+	default n
+	bool "Enable debugging sysfs en/disable"
+	help
+	  Debugging sysfs sometimes needs to be disappeared
+endmenu

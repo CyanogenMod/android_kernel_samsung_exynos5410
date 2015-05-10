@@ -20,6 +20,7 @@
 #include <linux/workqueue.h>
 #include <linux/videodev2.h>
 #include <linux/videodev2_exynos_media.h>
+#include <linux/videodev2_exynos_media_ext.h>
 #include <media/videobuf2-core.h>
 
 #include "s5p_mfc_common.h"
@@ -855,6 +856,24 @@ static struct v4l2_queryctrl controls[] = {
 		.step = 1,
 		.default_value = 0,
 	},
+	{
+		.id = V4L2_CID_MPEG_VIDEO_H264_HIERARCHICAL_CODING_LAYER_BIT,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.name = "Hierarchical Coding Layer Bit",
+		.minimum = INT_MIN,
+		.maximum = INT_MAX,
+		.step = 1,
+		.default_value = 0,
+	},
+	{
+		.id = V4L2_CID_MPEG_VIDEO_H264_HIERARCHICAL_CODING_LAYER_CH,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.name = "Hierarchical Coding Layer Change",
+		.minimum = INT_MIN,
+		.maximum = INT_MAX,
+		.step = 1,
+		.default_value = 0,
+	},
 };
 
 #define NUM_CTRLS ARRAY_SIZE(controls)
@@ -1020,6 +1039,78 @@ static struct s5p_mfc_ctrl_cfg mfc_ctrl_list[] = {
 		.flag_shft = 0,
 		.read_cst = enc_ctrl_read_cst,
 		.write_cst = NULL,
+	},
+	{	/* H.264 QP Max change */
+		.type = MFC_CTRL_TYPE_SET,
+		.id = V4L2_CID_MPEG_VIDEO_H264_MAX_QP,
+		.is_volatile = 1,
+		.mode = MFC_CTRL_MODE_CUSTOM,
+		.addr = S5P_FIMV_NEW_RC_QP_BOUND,
+		.mask = 0xFFFFFFFF,
+		.shft = 0,
+		.flag_mode = MFC_CTRL_MODE_CUSTOM,
+		.flag_addr = S5P_FIMV_PARAM_CHANGE_FLAG,
+		.flag_shft = 4,
+	},
+	{	/* H.264 QP Min change */
+		.type = MFC_CTRL_TYPE_SET,
+		.id = V4L2_CID_MPEG_VIDEO_H264_MIN_QP,
+		.is_volatile = 1,
+		.mode = MFC_CTRL_MODE_CUSTOM,
+		.addr = S5P_FIMV_NEW_RC_QP_BOUND,
+		.mask = 0xFFFFFFFF,
+		.shft = 0,
+		.flag_mode = MFC_CTRL_MODE_CUSTOM,
+		.flag_addr = S5P_FIMV_PARAM_CHANGE_FLAG,
+		.flag_shft = 4,
+	},
+	{	/* H.263 QP Max change */
+		.type = MFC_CTRL_TYPE_SET,
+		.id = V4L2_CID_MPEG_VIDEO_H263_MAX_QP,
+		.is_volatile = 1,
+		.mode = MFC_CTRL_MODE_CUSTOM,
+		.addr = S5P_FIMV_NEW_RC_QP_BOUND,
+		.mask = 0xFFFFFFFF,
+		.shft = 0,
+		.flag_mode = MFC_CTRL_MODE_CUSTOM,
+		.flag_addr = S5P_FIMV_PARAM_CHANGE_FLAG,
+		.flag_shft = 4,
+	},
+	{	/* H.263 QP Min change */
+		.type = MFC_CTRL_TYPE_SET,
+		.id = V4L2_CID_MPEG_VIDEO_H263_MIN_QP,
+		.is_volatile = 1,
+		.mode = MFC_CTRL_MODE_CUSTOM,
+		.addr = S5P_FIMV_NEW_RC_QP_BOUND,
+		.mask = 0xFFFFFFFF,
+		.shft = 0,
+		.flag_mode = MFC_CTRL_MODE_CUSTOM,
+		.flag_addr = S5P_FIMV_PARAM_CHANGE_FLAG,
+		.flag_shft = 4,
+	},
+	{	/* MPEG4 QP Max change */
+		.type = MFC_CTRL_TYPE_SET,
+		.id = V4L2_CID_MPEG_VIDEO_MPEG4_MAX_QP,
+		.is_volatile = 1,
+		.mode = MFC_CTRL_MODE_CUSTOM,
+		.addr = S5P_FIMV_NEW_RC_QP_BOUND,
+		.mask = 0xFFFFFFFF,
+		.shft = 0,
+		.flag_mode = MFC_CTRL_MODE_CUSTOM,
+		.flag_addr = S5P_FIMV_PARAM_CHANGE_FLAG,
+		.flag_shft = 4,
+	},
+	{	/* MPEG4 QP Min change */
+		.type = MFC_CTRL_TYPE_SET,
+		.id = V4L2_CID_MPEG_VIDEO_MPEG4_MIN_QP,
+		.is_volatile = 1,
+		.mode = MFC_CTRL_MODE_CUSTOM,
+		.addr = S5P_FIMV_NEW_RC_QP_BOUND,
+		.mask = 0xFFFFFFFF,
+		.shft = 0,
+		.flag_mode = MFC_CTRL_MODE_CUSTOM,
+		.flag_addr = S5P_FIMV_PARAM_CHANGE_FLAG,
+		.flag_shft = 4,
 	},
 };
 
@@ -2721,6 +2812,10 @@ static int set_enc_param(struct s5p_mfc_ctx *ctx, struct v4l2_control *ctrl)
 		p->codec.h264.hier_qp_layer_qp[(ctrl->value >> 16) & 0x7]
 			= ctrl->value & 0xFF;
 		break;
+	case V4L2_CID_MPEG_VIDEO_H264_HIERARCHICAL_CODING_LAYER_BIT:
+		p->codec.h264.hier_qp_layer_bit[(ctrl->value >> 28) & 0x7]
+			= ctrl->value & 0x7FFFFFF;
+		break;
 	case V4L2_CID_MPEG_VIDEO_H264_SEI_FRAME_PACKING:
 		p->codec.h264.sei_gen_enable = ctrl->value;
 		break;
@@ -2855,6 +2950,17 @@ static int set_ctrl_val(struct s5p_mfc_ctx *ctx, struct v4l2_control *ctrl)
 	case V4L2_CID_MPEG_VIDEO_QOS_RATIO:
 		ctx->qos_ratio = ctrl->value;
 		break;
+	case V4L2_CID_MPEG_VIDEO_H264_MAX_QP:
+	case V4L2_CID_MPEG_VIDEO_H263_MAX_QP:
+	case V4L2_CID_MPEG_VIDEO_MPEG4_MAX_QP:
+		ctx->qp_max_change = ctrl->value;
+		break;
+	case V4L2_CID_MPEG_VIDEO_H264_MIN_QP:
+	case V4L2_CID_MPEG_VIDEO_H263_MIN_QP:
+	case V4L2_CID_MPEG_VIDEO_MPEG4_MIN_QP:
+		ctx->qp_min_change = ctrl->value;
+		ctrl->value = ((ctx->qp_max_change << 8)
+			| (ctx->qp_min_change));
 	case V4L2_CID_MPEG_MFC51_VIDEO_FRAME_TAG:
 	case V4L2_CID_MPEG_MFC51_VIDEO_FORCE_FRAME_TYPE:
 	case V4L2_CID_MPEG_MFC51_VIDEO_I_PERIOD_CH:

@@ -32,13 +32,13 @@ enum {
 enum {
 	ION_EXYNOS_ID_COMMON		= 0,
 	ION_EXYNOS_ID_MFC_SH		= 2,
-	ION_EXYNOS_ID_G2D_WFD		= 3,
 	ION_EXYNOS_ID_FIMD_VIDEO	= 4,
 	ION_EXYNOS_ID_GSC		= 5,
 	ION_EXYNOS_ID_MFC_OUTPUT	= 6,
 	ION_EXYNOS_ID_MFC_INPUT		= 7,
 	ION_EXYNOS_ID_MFC_FW		= 8,
 	ION_EXYNOS_ID_SECTBL		= 9,
+	ION_EXYNOS_ID_G2D_WFD		= 10,
 	ION_EXYNOS_MAX_CONTIG_ID
 };
 
@@ -76,4 +76,5 @@ enum {
 #define ION_HEAP_EXYNOS_G2D_WFD_MASK					\
 		(ION_HEAP_EXYNOS_CONTIG_MASK|ION_EXYNOS_G2D_WFD_MASK)
 
+int ion_exynos_contig_heap_info(int region_id, phys_addr_t *phys, size_t *size);
 #endif /* _LINUX_ION_H */

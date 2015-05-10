@@ -538,16 +538,7 @@ static void mxt_report_input_data(struct mxt_data *data)
 					data->fingers[i].w);
 			input_report_abs(data->input_dev, ABS_MT_PRESSURE,
 					 data->fingers[i].z);
-#if TSP_USE_SHAPETOUCH
-			/* Currently revision G firmware do not support it */
-			if (data->pdata->revision == MXT_REVISION_I) {
-				input_report_abs(data->input_dev,
-					ABS_MT_COMPONENT,
-					data->fingers[i].component);
-				input_report_abs(data->input_dev,
-					ABS_MT_SUMSIZE, data->sumsize);
-			}
-#endif
+
 			input_report_key(data->input_dev,
 				BTN_TOOL_FINGER, 1);
 
@@ -2098,12 +2089,6 @@ static int __devinit mxt_probe(struct i2c_client *client,
 				0, MXT_AREA_MAX, 0, 0);
 	input_set_abs_params(input_dev, ABS_MT_PRESSURE,
 				0, MXT_AMPLITUDE_MAX, 0, 0);
-#if TSP_USE_SHAPETOUCH
-	input_set_abs_params(input_dev, ABS_MT_COMPONENT,
-				0, MXT_COMPONENT_MAX, 0, 0);
-	input_set_abs_params(input_dev, ABS_MT_SUMSIZE,
-				0, MXT_SUMSIZE_MAX, 0, 0);
-#endif
 
 	input_set_drvdata(input_dev, data);
 	i2c_set_clientdata(client, data);

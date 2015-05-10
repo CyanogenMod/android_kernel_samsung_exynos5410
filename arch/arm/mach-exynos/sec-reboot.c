@@ -67,7 +67,10 @@ static void sec_power_off(void)
 #define REBOOT_MODE_RECOVERY	4
 #define REBOOT_MODE_FOTA	5
 #define REBOOT_MODE_FOTA_BL	6	/* update bootloader */
-#define REBOOT_MODE_SECURE	7	/* image secure check fail */
+#define REBOOT_MODE_SECURE		7	/* image secure check fail */
+#if defined(CONFIG_DIAG_MODE)
+#define REBOOT_MODE_DIAG		0xe
+#endif
 
 #define REBOOT_SET_PREFIX	0xabc00000
 #define REBOOT_SET_DEBUG	0x000d0000
@@ -118,6 +121,13 @@ static void sec_reboot(char str, const char *cmd)
 			       EXYNOS_INFORM3);
 		else if (!strncmp(cmd, "emergency", 9))
 			writel(0, EXYNOS_INFORM3);
+#if defined(CONFIG_DIAG_MODE)
+		else if (!strncmp(cmd, "diag", 4)
+				&& !kstrtoul(cmd + 4, 0, &value)) {
+			writel(REBOOT_SET_PREFIX | REBOOT_MODE_DIAG | (value & 0x1),
+				EXYNOS_INFORM3);
+		}
+#endif
 		else
 			writel(REBOOT_MODE_PREFIX | REBOOT_MODE_NONE,
 			       EXYNOS_INFORM3);

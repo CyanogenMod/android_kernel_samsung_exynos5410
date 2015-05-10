@@ -183,3 +183,10 @@ config SENSORS_SSP_SX9500
 	  SEMTECH SX9500 device driver.
 
 	  Say N here if you do not use SX9500.
+
+config CREATE_META_DEV_USING_SYSFS
+	depends on SENSORS_SSP
+	tristate "Create Meta Device using sysfs call from HAL"
+	default n
+	help
+	  Say Y here for creating meta device using sysfs call from HAL

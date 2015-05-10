@@ -168,6 +168,7 @@ int s5p_mipi_dsi_wr_data(struct mipi_dsim_device *dsim,
 	unsigned char tempbuf[2] = {0, };
 	int remind, temp;
 	unsigned int payload;
+    int ret = len;
 
 	if (dsim->enabled == false) {
 		dev_dbg(dsim->dev, "MIPI DSIM is disabled.\n");
@@ -272,7 +273,8 @@ int s5p_mipi_dsi_wr_data(struct mipi_dsim_device *dsim,
 				s5p_mipi_dsi_debuging_info(dsim);
 				#endif
 				mutex_unlock(&dsim_rd_wr_mutex);
-				return -ETIMEDOUT;
+				ret = -ETIMEDOUT;
+                goto exit;
 		}
 		#ifdef CONFIG_FB_MIPI_DSIM_DBG
 		dsim->timeout_cnt = 0;
@@ -290,12 +292,19 @@ int s5p_mipi_dsi_wr_data(struct mipi_dsim_device *dsim,
 		dev_warn(dsim->dev,
 			"data id %x is not supported current DSI spec.\n", cmd);
 
-		mutex_unlock(&dsim_rd_wr_mutex);
-		return -EINVAL;
+		ret -EINVAL;
+        goto exit;
 	}
-
+exit:
+    if (dsim->enabled && (ret == -ETIMEDOUT)) {
+        dev_info(dsim->dev, "0x%08X, 0x%08X, 0x%08X\n",
+                readl(dsim->reg_base + S5P_DSIM_STATUS),
+                readl(dsim->reg_base + S5P_DSIM_INTSRC),
+                readl(dsim->reg_base + S5P_DSIM_FIFOCTRL));
+        s5p_mipi_dsi_init_fifo_pointer(dsim, DSIM_INIT_SFR);
+    }
 	mutex_unlock(&dsim_rd_wr_mutex);
-	return len;
+	return ret;
 }
 
 static void s5p_mipi_dsi_rx_err_handler(struct mipi_dsim_device *dsim,

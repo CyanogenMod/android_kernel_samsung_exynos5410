@@ -31,4 +31,13 @@ config IR_REMOCON_FPGA
 	  Lattice FPGA can support IR LED.
 	  To compile this driver as a module, choose M here.
 	  If unsure, say N.
+
+config ICE4_FPGA_RDA
+	tristate "FPGA chip for Barcode emulator and IR LED control by RDA"
+	default n
+	help
+	  Lattice FPGA can support both Barcode emulator and IR LED controller.
+	  The configuration is just BARCODE_EMUL, but it contains IRDA feature, too.
+	  To compile this driver as a module, choose M here.
+	  If unsure, say N.
 endmenu

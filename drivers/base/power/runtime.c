@@ -169,9 +169,9 @@ static int __rpm_callback(int (*cb)(struct device *), struct device *dev)
 	else
 		spin_unlock_irq(&dev->power.lock);
 
-	sec_debug_aux_log(SEC_DEBUG_AUXLOG_RUNTIME_PM_CHANGE, "before %pF %pF", cb, (dev->driver ? (dev->driver->pm ? dev->driver->pm : cb) : cb));
+	sec_debug_aux_log(SEC_DEBUG_AUXLOG_RUNTIME_PM_CHANGE, "before %pF %pF", cb, (dev->driver ? (dev->driver->pm ? dev->driver->pm : (void*)cb) : (void*)cb));
 	retval = cb(dev);
-	sec_debug_aux_log(SEC_DEBUG_AUXLOG_RUNTIME_PM_CHANGE, "after  %pF %pF ret=%d", cb, (dev->driver ? (dev->driver->pm ? dev->driver->pm : cb) : cb), retval);
+	sec_debug_aux_log(SEC_DEBUG_AUXLOG_RUNTIME_PM_CHANGE, "after  %pF %pF ret=%d", cb, (dev->driver ? (dev->driver->pm ? dev->driver->pm : (void*)cb) : (void*)cb), retval);
 	if (dev->power.irq_safe)
 		spin_lock(&dev->power.lock);
 	else

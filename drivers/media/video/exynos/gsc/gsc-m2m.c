@@ -25,8 +25,11 @@
 #include <linux/slab.h>
 #include <linux/clk.h>
 #include <media/v4l2-ioctl.h>
+#include <mach/smc.h>
 
 #include "gsc-core.h"
+
+#define SMC_PROTECTION_SET    0x81000000
 
 static int gsc_ctx_stop_req(struct gsc_ctx *ctx)
 {
@@ -516,6 +519,7 @@ static int gsc_m2m_streamon(struct file *file, void *fh,
 {
 	struct gsc_ctx *ctx = fh_to_ctx(fh);
 	struct gsc_dev *gsc = ctx->gsc_dev;
+	int id = gsc->id + 3;
 
 	/* The source and target color format need to be set */
 	if (V4L2_TYPE_IS_OUTPUT(type)) {
@@ -526,6 +530,11 @@ static int gsc_m2m_streamon(struct file *file, void *fh,
 	}
 
 	gsc_pm_qos_ctrl(gsc, GSC_QOS_ON, 160000, 160000);
+	
+	if (gsc->protected_content) {
+		exynos_smc(SMC_PROTECTION_SET, 0, id, 1);
+		gsc_dbg("DRM enable");
+	}
 
 	return v4l2_m2m_streamon(file, ctx->m2m_ctx, type);
 }
@@ -535,8 +544,13 @@ static int gsc_m2m_streamoff(struct file *file, void *fh,
 {
 	struct gsc_ctx *ctx = fh_to_ctx(fh);
 	struct gsc_dev *gsc = ctx->gsc_dev;
+	int id = gsc->id + 3;
 
 	gsc_pm_qos_ctrl(gsc, GSC_QOS_OFF, 0, 0);
+	
+	if (gsc->protected_content) {
+		exynos_smc(SMC_PROTECTION_SET, 0, id, 0);
+	}
 
 	return v4l2_m2m_streamoff(file, ctx->m2m_ctx, type);
 }
@@ -757,6 +771,13 @@ static int gsc_m2m_release(struct file *file)
 
 	if (--gsc->m2m.refcnt <= 0)
 		clear_bit(ST_M2M_OPEN, &gsc->state);
+			/* This is unnormal case */
+	if (gsc->protected_content) {
+		int id = gsc->id + 3;
+		exynos_smc(SMC_PROTECTION_SET, 0, id, 0);
+		gsc_set_protected_content(gsc, false);
+	}
+	
 	kfree(ctx);
 	return 0;
 }

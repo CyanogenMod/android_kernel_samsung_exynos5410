@@ -1109,11 +1109,13 @@ static int __cpuinit bL_hotplug_cpu_callback(struct notifier_block *nfb,
 
 	switch (action) {
 	case CPU_ONLINE:
+	case CPU_ONLINE_FROZEN:
 		arch_spin_lock(&exynos_lock);
 		add_core_count(cluster);
 		arch_spin_unlock(&exynos_lock);
 		break;
 	case CPU_DEAD:
+	case CPU_DEAD_FROZEN:
 		arch_spin_lock(&exynos_lock);
 		dec_core_count(cluster);
 		arch_spin_unlock(&exynos_lock);

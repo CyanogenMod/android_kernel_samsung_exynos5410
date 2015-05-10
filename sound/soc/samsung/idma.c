@@ -348,6 +348,7 @@ static irqreturn_t iis_irq(int irqno, void *dev_id)
 		iisahb |= val;
 		writel(iisahb, idma.regs + I2SAHB);
 
+		if (prtd->state & ST_RUNNING) {
 		addr = readl(idma.regs + I2SLVL0ADDR) - idma.lp_tx_addr;
 		addr += prtd->periodsz;
 		addr %= (prtd->end - prtd->start);
@@ -357,6 +358,7 @@ static irqreturn_t iis_irq(int irqno, void *dev_id)
 
 		if (prtd->cb)
 			prtd->cb(prtd->token, prtd->period);
+	}
 	}
 
 	return IRQ_HANDLED;

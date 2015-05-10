@@ -131,7 +131,6 @@ static void print_sensordata(struct ssp_data *data, unsigned int uSensor)
 			data->buf[uSensor].sig_motion,
 			get_msdelay(data->adDelayBuf[uSensor]));
 		break;
-#ifdef FEATURE_STEP_SENSOR
 	case STEP_DETECTOR:
 		ssp_dbg("[SSP] %u : %u(%ums)\n", uSensor,
 			data->buf[uSensor].step_det,
@@ -142,7 +141,6 @@ static void print_sensordata(struct ssp_data *data, unsigned int uSensor)
 			data->buf[uSensor].step_diff,
 			get_msdelay(data->adDelayBuf[uSensor]));
 		break;
-#endif
 	default:
 		ssp_dbg("Wrong sensorCnt: %u\n", uSensor);
 		break;

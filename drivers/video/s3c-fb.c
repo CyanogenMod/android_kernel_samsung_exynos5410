@@ -263,6 +263,13 @@ struct s3c_dma_buf_data {
 	struct sync_fence *fence;
 };
 
+struct s3c_fb_rect {
+        int     left;
+        int     top;
+        int     right;
+        int     bottom;
+};
+
 struct s3c_reg_data {
 	struct list_head	list;
 	u32			shadowcon;
@@ -281,6 +288,7 @@ struct s3c_reg_data {
 	u32			vidw_buf_size[S3C_FB_MAX_WIN];
 	struct s3c_dma_buf_data	dma_buf_data[S3C_FB_MAX_WIN];
 	unsigned int		bandwidth;
+	unsigned int    overlap_cnt;
 };
 #endif
 
@@ -416,8 +424,12 @@ struct s3c_fb {
 #endif
 	struct exynos5_bus_mif_handle *fb_mif_handle;
 	struct exynos5_bus_int_handle *fb_int_handle;
+	unsigned int            prev_bandwidth;
 
 };
+
+static u32 s3c_fb_rgborder(int format);
+static u32 s3c_fb_get_pixel_format(struct fb_var_screeninfo *var);
 
 static int s3c_fb_get_clk_cnt(struct clk *clk)
 {
@@ -502,6 +514,94 @@ static bool s3c_fb_validate_x_alignment(struct s3c_fb *sfb, int x, u32 w,
 	return 1;
 }
 
+static bool s3c_fb_intersect(struct s3c_fb_rect *r1, struct s3c_fb_rect *r2)
+{
+        return !(r1->left > r2->right || r1->right < r2->left ||
+                r1->top > r2->bottom || r1->bottom < r2->top);
+}
+
+static int s3c_fb_intersection(struct s3c_fb_rect *r1,
+                                struct s3c_fb_rect *r2, struct s3c_fb_rect *r3)
+{
+        r3->top = max(r1->top, r2->top);
+        r3->bottom = min(r1->bottom, r2->bottom);
+        r3->left = max(r1->left, r2->left);
+        r3->right = min(r1->right, r2->right);
+        return 0;
+}
+
+static int s3c_fb_get_overlap_cnt(struct s3c_fb *sfb, struct s3c_fb_win_config *win_config)
+{
+        struct s3c_fb_rect overlaps2[10];
+        struct s3c_fb_rect overlaps3[6];
+        struct s3c_fb_rect overlaps4[3];
+        struct s3c_fb_rect r1, r2;
+        struct s3c_fb_win_config *win_cfg1, *win_cfg2;
+        int overlaps2_cnt = 0;
+        int overlaps3_cnt = 0;
+        int overlaps4_cnt = 0;
+        int i, j;
+        int overlap_max_cnt = 1;
+        /* For optimizing power consumuption */
+        unsigned long update_area = win_config[0].w * win_config[0].h;
+
+        for (i = 1; i < sfb->variant.nr_windows; i++) {
+                win_cfg1 = &win_config[i];
+                if (win_cfg1->state != S3C_FB_WIN_STATE_BUFFER)
+                        continue;
+                r1.left = win_cfg1->x;
+                r1.top = win_cfg1->y;
+                r1.right = r1.left + win_cfg1->w - 1;
+                r1.bottom = r1.top + win_cfg1->h - 1;
+                /* accumulation update area */
+                update_area += (win_cfg1->w * win_cfg1->h);
+                for (j = 0; j < overlaps4_cnt; j++) {
+                        /* 5 window overlaps */
+												if (s3c_fb_intersect(&r1, &overlaps4[j])) {
+                                overlap_max_cnt = 5;
+                                break;
+                        }
+                }
+                for (j = 0; (j < overlaps3_cnt) && (overlaps4_cnt < 3); j++) {
+                        /* 4 window overlaps */
+                        if (s3c_fb_intersect(&r1, &overlaps3[j])) {
+                                s3c_fb_intersection(&r1, &overlaps3[j], &overlaps4[overlaps4_cnt]);
+                                overlaps4_cnt++;
+                        }
+                }
+                for (j = 0; (j < overlaps2_cnt) && (overlaps3_cnt < 6); j++) {
+                        /* 3 window overlaps */
+                        if (s3c_fb_intersect(&r1, &overlaps2[j])) {
+                                s3c_fb_intersection(&r1, &overlaps2[j], &overlaps3[overlaps3_cnt]);
+                                overlaps3_cnt++;
+                        }
+                }
+                for (j = 0; (j < i) && (overlaps2_cnt < 10); j++) {
+                        win_cfg2 = &win_config[j];
+                        if (win_cfg2->state != S3C_FB_WIN_STATE_BUFFER)
+                                continue;
+                        r2.left = win_cfg2->x;
+                        r2.top = win_cfg2->y;
+                        r2.right = r2.left + win_cfg2->w - 1;
+                        r2.bottom = r2.top + win_cfg2->h - 1;
+                        /* 2 window overlaps */
+                        if (s3c_fb_intersect(&r1, &r2)) {
+                                s3c_fb_intersection(&r1, &r2, &overlaps2[overlaps2_cnt]);
+                                overlaps2_cnt++;
+                        }
+                }
+        }
+
+        if (overlaps4_cnt > 0)
+                overlap_max_cnt = max(overlap_max_cnt, 4);
+        else if (overlaps3_cnt > 0)
+                overlap_max_cnt = max(overlap_max_cnt, 3);
+        else if (overlaps2_cnt > 0)
+                overlap_max_cnt = max(overlap_max_cnt, 2);
+
+        return overlap_max_cnt;
+}
+
 /**
  * s3c_fb_validate_win_bpp - validate the bits-per-pixel for this mode.
  * @win: The device window.
@@ -554,9 +654,9 @@ static int s3c_fb_check_var(struct fb_var_screeninfo *var,
 	case 8:
 		if (sfb->variant.palette[win->index] != 0) {
 			/* non palletised, A:1,R:2,G:3,B:2 mode */
-			var->red.offset		= 4;
+			var->red.offset		= 0;
 			var->green.offset	= 2;
-			var->blue.offset	= 0;
+			var->blue.offset	= 4;
 			var->red.length		= 5;
 			var->green.length	= 3;
 			var->blue.length	= 2;
@@ -578,9 +678,9 @@ static int s3c_fb_check_var(struct fb_var_screeninfo *var,
 		var->bits_per_pixel	= 32;
 
 		/* 666 format */
-		var->red.offset		= 12;
+		var->red.offset		= 0;
 		var->green.offset	= 6;
-		var->blue.offset	= 0;
+		var->blue.offset	= 12;
 		var->red.length		= 6;
 		var->green.length	= 6;
 		var->blue.length	= 6;
@@ -588,9 +688,9 @@ static int s3c_fb_check_var(struct fb_var_screeninfo *var,
 
 	case 16:
 		/* 16 bpp, 565 format */
-		var->red.offset		= 11;
+		var->red.offset		= 0;
 		var->green.offset	= 5;
-		var->blue.offset	= 0;
+		var->blue.offset	= 11;
 		var->red.length		= 5;
 		var->green.length	= 6;
 		var->blue.length	= 5;
@@ -605,11 +705,11 @@ static int s3c_fb_check_var(struct fb_var_screeninfo *var,
 	case 24:
 		/* our 24bpp is unpacked, so 32bpp */
 		var->bits_per_pixel	= 32;
-		var->red.offset		= 16;
+		var->red.offset		= 0;
 		var->red.length		= 8;
 		var->green.offset	= 8;
 		var->green.length	= 8;
-		var->blue.offset	= 0;
+		var->blue.offset	= 16;
 		var->blue.length	= 8;
 		break;
 
@@ -961,6 +1061,7 @@ static int s3c_fb_set_par(struct fb_info *info)
 	int win_no = win->index;
 	u32 data;
 	int old_wincon;
+	int format;
 
 	dev_dbg(sfb->dev, "setting framebuffer parameters\n");
 
@@ -1022,6 +1123,9 @@ static int s3c_fb_set_par(struct fb_info *info)
 	data = vidw_alpha(win->variant.has_osd_alpha, 0xff, 0xff, 0xff);
 	writel(data, regs + VIDW_ALPHA1(win_no));
 
+	format = s3c_fb_get_pixel_format(var);
+	data = s3c_fb_rgborder(format);
+	writel(data, regs + WIN_RGB_ORDER(win_no));
 	/* preserve whether window was enabled */
 	data = old_wincon & WINCONx_ENWIN;
 
@@ -1228,12 +1332,14 @@ static int s3c_fb_blank(int blank_mode, struct fb_info *info)
 #if defined(CONFIG_ARM_EXYNOS5410_BUS_DEVFREQ)
 		pm_qos_update_request(&exynos5_mif_qos, FIMD_MIF_BUS_MIN);
 		pm_qos_update_request(&exynos5_int_qos, FIMD_INT_BUS_MIN);
+		sfb->prev_bandwidth = 0;
 #endif
 		break;
 
 	case FB_BLANK_UNBLANK:
 #if defined(CONFIG_ARM_EXYNOS5410_BUS_DEVFREQ)
 		pm_qos_update_request(&exynos5_mif_qos, FIMD_MIF_BUS_MID);
+		sfb->prev_bandwidth = 0;
 #endif
 		if (pd->dsim_on)
 			pd->dsim_on(dsim_device);
@@ -1728,6 +1834,40 @@ static void s3c_fb_free_dma_buf(struct s3c_fb *sfb,
 	memset(dma, 0, sizeof(struct s3c_dma_buf_data));
 }
 
+static u32 s3c_fb_get_pixel_format(struct fb_var_screeninfo *var)
+{
+	u32 format = S3C_FB_PIXEL_FORMAT_RGBA_8888;
+
+	switch (var->bits_per_pixel) {
+	case 16:
+		if (var->red.offset == 0) {
+			if (var->transp.length == 1)
+				format = S3C_FB_PIXEL_FORMAT_RGBA_5551;
+			else
+				format = S3C_FB_PIXEL_FORMAT_RGB_565;
+		}
+		break;
+	case 32:
+		if (var->red.offset == 0) {
+			if (var->transp.length == 0)
+				format = S3C_FB_PIXEL_FORMAT_RGBX_8888;
+			else
+				format = S3C_FB_PIXEL_FORMAT_RGBA_8888;
+		}
+		else {
+			if (var->transp.length == 0)
+				format = S3C_FB_PIXEL_FORMAT_BGRX_8888;
+			else
+				format = S3C_FB_PIXEL_FORMAT_BGRA_8888;
+		}
+		break;
+	default:
+		break;
+	}
+
+	return format;
+}
+
 static u32 s3c_fb_red_length(int format)
 {
 	switch (format) {
@@ -2207,6 +2347,7 @@ static int s3c_fb_set_win_config(struct s3c_fb *sfb,
 	}
 
 	regs->bandwidth = bw;
+	regs->overlap_cnt = s3c_fb_get_overlap_cnt(sfb, win_config);
 
 	dev_dbg(sfb->dev, "Total BW = %d Mbits, Max BW per window = %d Mbits\n",
 			bw / (1024 * 1024), WQXGA_MAX_BW_PER_WINDOW / (1024 * 1024));
@@ -2315,10 +2456,16 @@ static void s3c_fb_update_regs(struct s3c_fb *sfb, struct s3c_reg_data *regs)
 	}
 
 #if defined(CONFIG_ARM_EXYNOS5410_BUS_DEVFREQ)
-	if (regs->bandwidth > FIMD_DEVFREQ_THRESHOLD) {
-		pm_qos_update_request(&exynos5_mif_qos, FIMD_MIF_BUS_MAX);
-		pm_qos_update_request(&exynos5_int_qos, FIMD_INT_BUS_MAX);
-		bts_set_bw(regs->bandwidth);
+	if (sfb->prev_bandwidth < regs->bandwidth) {
+		if ((regs->bandwidth > FIMD_DEVFREQ_THRESHOLD) || (regs->overlap_cnt > 1)) {
+			pm_qos_update_request(&exynos5_mif_qos, FIMD_MIF_BUS_MAX);
+			pm_qos_update_request(&exynos5_int_qos, FIMD_INT_BUS_MAX);
+			bts_set_bw(regs->bandwidth);
+		} else {
+			pm_qos_update_request(&exynos5_mif_qos, FIMD_MIF_BUS_MID);
+			pm_qos_update_request(&exynos5_int_qos, FIMD_INT_BUS_MAX);
+			bts_set_bw(regs->bandwidth);
+		}
 	}
 #endif
 
@@ -2352,12 +2499,15 @@ static void s3c_fb_update_regs(struct s3c_fb *sfb, struct s3c_reg_data *regs)
 		s3c_fb_free_dma_buf(sfb, &old_dma_bufs[i]);
 
 #if defined(CONFIG_ARM_EXYNOS5410_BUS_DEVFREQ)
-	if (regs->bandwidth <= FIMD_DEVFREQ_THRESHOLD) {
-		bts_set_bw(regs->bandwidth);
-		pm_qos_update_request(&exynos5_mif_qos, FIMD_MIF_BUS_MID);
-		pm_qos_update_request(&exynos5_int_qos, FIMD_INT_BUS_MID);
+	if (sfb->prev_bandwidth > regs->bandwidth) {
+		if ((regs->bandwidth <= FIMD_DEVFREQ_THRESHOLD) && (regs->overlap_cnt <= 1)) {
+			bts_set_bw(regs->bandwidth);
+			pm_qos_update_request(&exynos5_mif_qos, FIMD_MIF_BUS_MID);
+			pm_qos_update_request(&exynos5_int_qos, FIMD_INT_BUS_MAX);
+		}
 	}
 #endif
+	sfb->prev_bandwidth = regs->bandwidth;
 }
 
 static void s3c_fb_update_regs_handler(struct kthread_work *work)

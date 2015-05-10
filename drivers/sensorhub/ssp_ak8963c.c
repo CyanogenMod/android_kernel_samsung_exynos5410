@@ -19,6 +19,7 @@ void report_mag_data(struct ssp_data *data, struct sensor_value *magdata)
 	data->buf[GEOMAGNETIC_SENSOR].x = magdata->x;
 	data->buf[GEOMAGNETIC_SENSOR].y = magdata->y;
 	data->buf[GEOMAGNETIC_SENSOR].z = magdata->z;
+	data->buf[GEOMAGNETIC_SENSOR].timestamp = magdata->timestamp;
 }
 
 /*************************************************************************/
@@ -52,13 +53,14 @@ static int akmd_copy_out(unsigned int cmd, void __user *argp,
 static long akmd_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	int iRet;
+	int time_hi, time_lo;
 	void __user *argp = (void __user *)arg;
 	struct ssp_data *data = container_of(file->private_data,
 					struct ssp_data, akmd_device);
 
 	union {
-		u8 uData[8];
-		u8 uMagData[8];
+		u8 uData[16];
+		u8 uMagData[16];
 		u8 uFuseData[3];
 		int iAccData[3];
 	} akmdbuf;
@@ -83,6 +85,17 @@ static long akmd_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		akmdbuf.uMagData[5] = data->buf[GEOMAGNETIC_SENSOR].z & 0xff;
 		akmdbuf.uMagData[6] = data->buf[GEOMAGNETIC_SENSOR].z >> 8;
 		akmdbuf.uMagData[7] = 0x10;
+
+		time_lo = (int)(data->buf[GEOMAGNETIC_SENSOR].timestamp & TIME_LO_MASK);
+		time_hi = (int)((data->buf[GEOMAGNETIC_SENSOR].timestamp & TIME_HI_MASK) >> TIME_HI_SHIFT);
+		akmdbuf.uMagData[8] = time_lo & 0xff;
+		akmdbuf.uMagData[9] = (time_lo & 0xff00) >> 8;
+		akmdbuf.uMagData[10] = (time_lo & 0xff0000) >> 16;
+		akmdbuf.uMagData[11] = (time_lo & 0xff000000) >> 24;
+		akmdbuf.uMagData[12] = time_hi & 0xff;
+		akmdbuf.uMagData[13] = (time_hi & 0xff00) >> 8;
+		akmdbuf.uMagData[14] = (time_hi & 0xff0000) >> 16;
+		akmdbuf.uMagData[15] = (time_hi & 0xff000000) >> 24;
 		break;
 	case ECS_IOCTL_GET_ACCDATA:
 		akmdbuf.iAccData[0] = data->buf[ACCELEROMETER_SENSOR].x;

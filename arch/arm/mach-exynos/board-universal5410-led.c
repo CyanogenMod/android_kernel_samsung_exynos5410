@@ -237,9 +237,6 @@ to reduce power consumption when the device is enter into sleep mode.
 		gpio_i2c_data21.scl_pin = EXYNOS5410_GPG0(2);
 		gpio_i2c_data21.sda_pin = EXYNOS5410_GPG0(3);
 	}
-	if (system_rev >= 9) {
-		lp5562_pdata.update_config = LP5562_PWM_HF | LP5562_PWRSAVE_EN | LP5562_CLK_SRC_EXT;
-	}
 #endif
 
 #if defined(CONFIG_MACH_JA_KOR_LGT)

@@ -29,6 +29,7 @@
 
 #include "noc_probe.h"
 #include "exynos5410_volt_ctrl.h"
+#include <mach/sec_debug.h>
 
 #define INT_PANIC_FREQ	200000
 struct delayed_work do_panic;
@@ -394,6 +395,10 @@ static void exynos5_int_set_freq(unsigned long target_freq, unsigned long old_fr
 	unsigned int i;
 	unsigned int target_idx = LV_0;
 	struct int_clkdiv_info *target_int_clkdiv;
+
+	sec_debug_aux_log(SEC_DEBUG_AUXLOG_CPU_CLOCK_SWITCH_CHANGE,
+		"[INT] old:%7d new:%7d",
+		old_freq, target_freq);
 
 	/*
 	 * Find setting value with target frequency

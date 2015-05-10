@@ -23,6 +23,7 @@
 #include <mach/asv-exynos.h>
 
 #include <plat/clock.h>
+#include <mach/sec_debug.h>
 
 #define CPUFREQ_LEVEL_END_CA7	(L11 + 1)
 #define CPUFREQ_LEVEL_END_CA15	(L18 + 1)
@@ -691,6 +692,10 @@ static void exynos5410_set_frequency_CA7(unsigned int old_index,
 {
 	unsigned int tmp;
 
+	sec_debug_aux_log(SEC_DEBUG_AUXLOG_CPU_CLOCK_SWITCH_CHANGE,
+		"[A07] old:%7d new:%7d",
+		exynos5410_freq_table_CA7[old_index].frequency, exynos5410_freq_table_CA7[new_index].frequency);
+
 	if (pm_qos_request_active(&exynos5_cpu_int_qos))
 		pm_qos_update_request(&exynos5_cpu_int_qos, 0);
 
@@ -736,6 +741,10 @@ static void exynos5410_set_frequency_CA15(unsigned int old_index,
 					  unsigned int new_index)
 {
 	unsigned int tmp;
+
+	sec_debug_aux_log(SEC_DEBUG_AUXLOG_CPU_CLOCK_SWITCH_CHANGE,
+		"[A15] old:%7d new:%7d",
+		exynos5410_freq_table_CA15[old_index].frequency, exynos5410_freq_table_CA15[new_index].frequency);
 
 	if (old_index > new_index) {
 		/* Before change clock rate, lock INT clock to garantee INT LVcc */

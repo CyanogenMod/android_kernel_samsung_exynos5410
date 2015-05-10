@@ -687,22 +687,11 @@ static struct s5p_platform_mipi_dsim dsim_platform_data = {
 };
 #endif
 
-#ifdef CONFIG_FB_S5P_EXTDSP
-static struct s3c_fb_pd_win default_extdsp_data = {
-	.width = 1920,
-	.height = 1080,
-	.default_bpp = 32,
-};
-#endif
-
 static struct platform_device *universal5410_display_devices[] __initdata = {
 #ifdef CONFIG_FB_MIPI_DSIM
 	&s5p_device_mipi_dsim1,
 #endif
 	&s5p_device_fimd1,
-#ifdef CONFIG_FB_S5P_EXTDSP
-	&s5p_device_extdsp,
-#endif
 };
 
 #if defined(CONFIG_FB_LCD_FREQ_SWITCH)
@@ -766,10 +755,6 @@ void __init exynos5_universal5410_display_init(void)
 	s5p_dsim1_set_platdata(&dsim_platform_data);
 #endif
 	s5p_fimd1_set_platdata(&universal5410_lcd1_pdata);
-
-#ifdef CONFIG_FB_S5P_EXTDSP
-	s3cfb_extdsp_set_platdata(&default_extdsp_data);
-#endif
 
 	platform_add_devices(universal5410_display_devices,
 		ARRAY_SIZE(universal5410_display_devices));

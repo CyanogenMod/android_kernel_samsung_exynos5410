@@ -116,7 +116,6 @@ int s5p_mfc_alloc_firmware(struct s5p_mfc_dev *dev)
 		return -EIO;
 	}
 
-	if (!dev->num_drm_inst) {
 		s5p_mfc_bitproc_virt =
 				s5p_mfc_mem_vaddr_priv(s5p_mfc_bitproc_buf);
 		mfc_debug(2, "Virtual address for FW: %08lx\n",
@@ -128,7 +127,6 @@ int s5p_mfc_alloc_firmware(struct s5p_mfc_dev *dev)
 			s5p_mfc_bitproc_buf = 0;
 			return -EIO;
 		}
-	}
 
 	dev->port_a = s5p_mfc_bitproc_phys;
 
@@ -412,6 +410,7 @@ int s5p_mfc_init_hw(struct s5p_mfc_dev *dev)
 			mfc_err("Finally failed to load.\n");
 			s5p_mfc_clean_dev_int_flags(dev);
 			ret = -EIO;
+			dev->skip_bus_waiting = 1;
 			goto err_init_hw;
 		}
 	}
@@ -468,6 +467,10 @@ err_init_hw:
 	s5p_mfc_clock_off();
 	if (ret != 0)
 		mfc_err("Init h/w is failed\n");
+
+	if (dev->skip_bus_waiting)
+		dev->skip_bus_waiting = 0;
+
 	mfc_debug_leave();
 
 	return ret;

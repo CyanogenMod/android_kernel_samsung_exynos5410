@@ -112,8 +112,10 @@ static const unsigned int candela_table[GAMMA_MAX] = {
 
 static struct lcd_info *g_lcd;
 
+#if 0
 extern void (*panel_touchkey_on)(void);
 extern void (*panel_touchkey_off)(void);
+#endif
 
 static int s6e8fa0_write(struct lcd_info *lcd, const u8 *seq, u32 len)
 {
@@ -953,6 +955,7 @@ static int update_brightness(struct lcd_info *lcd, u8 force)
 	return 0;
 }
 
+#if 0
 /* This function is only used by touch driver for TSP tunning in RevG panel. */
 /* So other type's lcd driver don't have this function */
 static void s6e8fa0_ldi_touchkey_on(void)
@@ -966,6 +969,7 @@ static void s6e8fa0_ldi_touchkey_off(void)
 	if (g_lcd != NULL)
 		s6e8fa0_write(g_lcd, SEQ_TOUCHKEY_OFF, ARRAY_SIZE(SEQ_TOUCHKEY_OFF));
 }
+#endif
 
 static int s6e8fa0_ldi_init(struct lcd_info *lcd)
 {
@@ -1004,6 +1008,10 @@ static int s6e8fa0_ldi_init(struct lcd_info *lcd)
 static int s6e8fa0_ldi_enable(struct lcd_info *lcd)
 {
 	int ret = 0;
+
+	s6e8fa0_write(lcd, SEQ_TEST_KEY_ON_FC, ARRAY_SIZE(SEQ_TEST_KEY_ON_FC));
+	s6e8fa0_write(lcd, SEQ_TOUCHKEY_ON, ARRAY_SIZE(SEQ_TOUCHKEY_ON));
+	s6e8fa0_write(lcd, SEQ_TEST_KEY_OFF_FC, ARRAY_SIZE(SEQ_TEST_KEY_OFF_FC));
 
 	s6e8fa0_write(lcd, SEQ_DISPLAY_ON, ARRAY_SIZE(SEQ_DISPLAY_ON));
 
@@ -1426,8 +1434,8 @@ static int s6e8fa0_probe(struct mipi_dsim_device *dsim)
 
 	/* dev_set_drvdata(dsim->dev, lcd); */
 
-	panel_touchkey_on = s6e8fa0_ldi_touchkey_on;
-	panel_touchkey_off = s6e8fa0_ldi_touchkey_off;
+	/* panel_touchkey_on = s6e8fa0_ldi_touchkey_on;
+	panel_touchkey_off = s6e8fa0_ldi_touchkey_off; */
 
 	mutex_init(&lcd->lock);
 	mutex_init(&lcd->bl_lock);

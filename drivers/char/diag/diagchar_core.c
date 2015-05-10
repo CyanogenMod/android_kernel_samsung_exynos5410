@@ -63,6 +63,10 @@ static unsigned int threshold_client_limit = 30;
 unsigned int diag_max_reg = 600;
 unsigned int diag_threshold_reg = 750;
 
+#if defined(CONFIG_DIAG_MODE)
+static int diag_mode;
+#endif
+
 /* Timer variables */
 static struct timer_list drain_timer;
 static int timer_in_progress;
@@ -1162,10 +1166,27 @@ void diag_hsic_fn(int type)
 inline void diag_hsic_fn(int type) {}
 #endif
 
+#if defined(CONFIG_DIAG_MODE)
+static int __init get_diag_value(char *str)
+{
+	diag_mode = str[2] - '0';
+
+	return 1;
+}
+__setup("diag_mode=", get_diag_value);
+#endif
+
 static int __init diagchar_init(void)
 {
 	dev_t dev;
 	int error;
+
+#if defined(CONFIG_DIAG_MODE)
+	if (!diag_mode) {
+		pr_info("diagchar_core isn't enabled.\n");
+		return -EPERM;
+	}
+#endif
 
 	pr_debug("diagfwd initializing ..\n");
 	driver = kzalloc(sizeof(struct diagchar_dev) + 5, GFP_KERNEL);

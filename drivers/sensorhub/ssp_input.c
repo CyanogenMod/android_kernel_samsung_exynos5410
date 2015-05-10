@@ -25,6 +25,8 @@ void convert_acc_data(s16 *iValue)
 
 void report_acc_data(struct ssp_data *data, struct sensor_value *accdata)
 {
+	int time_hi, time_lo;
+
 	convert_acc_data(&accdata->x);
 	convert_acc_data(&accdata->y);
 	convert_acc_data(&accdata->z);
@@ -52,18 +54,24 @@ void report_acc_data(struct ssp_data *data, struct sensor_value *accdata)
 			(data->buf[ACCELEROMETER_SENSOR].z > 0 ? MIN_ACCEL_2G : MAX_ACCEL_2G);
 	}
 
+	time_lo = (int)(accdata->timestamp & TIME_LO_MASK);
+	time_hi = (int)((accdata->timestamp & TIME_HI_MASK) >> TIME_HI_SHIFT);
+
 	input_report_rel(data->acc_input_dev, REL_X,
 		data->buf[ACCELEROMETER_SENSOR].x);
 	input_report_rel(data->acc_input_dev, REL_Y,
 		data->buf[ACCELEROMETER_SENSOR].y);
 	input_report_rel(data->acc_input_dev, REL_Z,
 		data->buf[ACCELEROMETER_SENSOR].z);
+	input_report_rel(data->acc_input_dev, REL_DIAL, time_hi);
+	input_report_rel(data->acc_input_dev, REL_MISC, time_lo);
 	input_sync(data->acc_input_dev);
 }
 
 void report_gyro_data(struct ssp_data *data, struct sensor_value *gyrodata)
 {
-	long lTemp[3] = {0,};
+	long lTemp[6] = {0,};
+	int time_hi, time_lo;
 
 	data->buf[GYROSCOPE_SENSOR].x = gyrodata->x - data->gyrocal.x;
 	data->buf[GYROSCOPE_SENSOR].y = gyrodata->y - data->gyrocal.y;
@@ -89,26 +97,46 @@ void report_gyro_data(struct ssp_data *data, struct sensor_value *gyrodata)
 	}
 
 	if (data->uGyroDps == GYROSCOPE_DPS500) {
-		lTemp[0] = (long)data->buf[GYROSCOPE_SENSOR].x;
-		lTemp[1] = (long)data->buf[GYROSCOPE_SENSOR].y;
-		lTemp[2] = (long)data->buf[GYROSCOPE_SENSOR].z;
+		lTemp[0] = (long)gyrodata->x;
+		lTemp[1] = (long)gyrodata->y;
+		lTemp[2] = (long)gyrodata->z;
+		lTemp[3] = (long)data->gyrocal.x;
+		lTemp[4] = (long)data->gyrocal.y;
+		lTemp[5] = (long)data->gyrocal.z;
 	} else if (data->uGyroDps == GYROSCOPE_DPS250)	{
-		lTemp[0] = (long)data->buf[GYROSCOPE_SENSOR].x >> 1;
-		lTemp[1] = (long)data->buf[GYROSCOPE_SENSOR].y >> 1;
-		lTemp[2] = (long)data->buf[GYROSCOPE_SENSOR].z >> 1;
+		lTemp[0] = (long)gyrodata->x >> 1;
+		lTemp[1] = (long)gyrodata->y >> 1;
+		lTemp[2] = (long)gyrodata->z >> 1;
+		lTemp[3] = (long)data->gyrocal.x >> 1;
+		lTemp[4] = (long)data->gyrocal.y >> 1;
+		lTemp[5] = (long)data->gyrocal.z >> 1;
 	} else if (data->uGyroDps == GYROSCOPE_DPS2000)	{
-		lTemp[0] = (long)data->buf[GYROSCOPE_SENSOR].x << 2;
-		lTemp[1] = (long)data->buf[GYROSCOPE_SENSOR].y << 2;
-		lTemp[2] = (long)data->buf[GYROSCOPE_SENSOR].z << 2;
+		lTemp[0] = (long)gyrodata->x << 2;
+		lTemp[1] = (long)gyrodata->y << 2;
+		lTemp[2] = (long)gyrodata->z << 2;
+		lTemp[3] = (long)data->gyrocal.x << 2;
+		lTemp[4] = (long)data->gyrocal.y << 2;
+		lTemp[5] = (long)data->gyrocal.z << 2;
 	} else {
-		lTemp[0] = (long)data->buf[GYROSCOPE_SENSOR].x;
-		lTemp[1] = (long)data->buf[GYROSCOPE_SENSOR].y;
-		lTemp[2] = (long)data->buf[GYROSCOPE_SENSOR].z;
+		lTemp[0] = (long)gyrodata->x;
+		lTemp[1] = (long)gyrodata->y;
+		lTemp[2] = (long)gyrodata->z;
+		lTemp[3] = (long)data->gyrocal.x;
+		lTemp[4] = (long)data->gyrocal.y;
+		lTemp[5] = (long)data->gyrocal.z;
 	}
+
+	time_lo = (int)(gyrodata->timestamp & TIME_LO_MASK);
+	time_hi = (int)((gyrodata->timestamp & TIME_HI_MASK) >> TIME_HI_SHIFT);
 
 	input_report_rel(data->gyro_input_dev, REL_RX, lTemp[0]);
 	input_report_rel(data->gyro_input_dev, REL_RY, lTemp[1]);
 	input_report_rel(data->gyro_input_dev, REL_RZ, lTemp[2]);
+	input_report_rel(data->gyro_input_dev, REL_HWHEEL, lTemp[3]);
+	input_report_rel(data->gyro_input_dev, REL_DIAL, lTemp[4]);
+	input_report_rel(data->gyro_input_dev, REL_WHEEL, lTemp[5]);
+	input_report_rel(data->gyro_input_dev, REL_X, time_hi);
+	input_report_rel(data->gyro_input_dev, REL_Y, time_lo);
 	input_sync(data->gyro_input_dev);
 }
 
@@ -250,7 +278,6 @@ void report_sig_motion_data(struct ssp_data *data,
 	input_sync(data->sig_motion_input_dev);
 }
 
-#ifdef FEATURE_STEP_SENSOR
 void report_step_det_data(struct ssp_data *data,
 	struct sensor_value *sig_motion_data)
 {
@@ -272,7 +299,6 @@ void report_step_cnt_data(struct ssp_data *data,
 		data->step_count_total + 1);
 	input_sync(data->step_cnt_input_dev);
 }
-#endif
 
 int initialize_event_symlink(struct ssp_data *data)
 {
@@ -280,72 +306,45 @@ int initialize_event_symlink(struct ssp_data *data)
 
 	iRet = sensors_create_symlink(data->acc_input_dev);
 	if (iRet < 0)
-		goto iRet_acc_sysfs_create_link;
+		pr_err("[SSP]: %s - Could not create event symlink for %s", __func__, data->acc_input_dev->name);
 
 	iRet = sensors_create_symlink(data->gyro_input_dev);
 	if (iRet < 0)
-		goto iRet_gyro_sysfs_create_link;
+		pr_err("[SSP]: %s - Could not create event symlink for %s", __func__, data->gyro_input_dev->name);
 
 	iRet = sensors_create_symlink(data->pressure_input_dev);
 	if (iRet < 0)
-		goto iRet_prs_sysfs_create_link;
+		pr_err("[SSP]: %s - Could not create event symlink for %s", __func__, data->pressure_input_dev->name);
 
 	iRet = sensors_create_symlink(data->light_input_dev);
 	if (iRet < 0)
-		goto iRet_light_sysfs_create_link;
+		pr_err("[SSP]: %s - Could not create event symlink for %s", __func__, data->light_input_dev->name);
 
 	iRet = sensors_create_symlink(data->prox_input_dev);
 	if (iRet < 0)
-		goto iRet_prox_sysfs_create_link;
+		pr_err("[SSP]: %s - Could not create event symlink for %s", __func__, data->prox_input_dev->name);
 
 	iRet = sensors_create_symlink(data->temp_humi_input_dev);
 	if (iRet < 0)
-		goto iRet_temp_humi_sysfs_create_link;
+		pr_err("[SSP]: %s - Could not create event symlink for %s", __func__, data->temp_humi_input_dev->name);
 
 	iRet = sensors_create_symlink(data->gesture_input_dev);
 	if (iRet < 0)
-		goto iRet_gesture_sysfs_create_link;
+		pr_err("[SSP]: %s - Could not create event symlink for %s", __func__, data->gesture_input_dev->name);
 
 	iRet = sensors_create_symlink(data->sig_motion_input_dev);
 	if (iRet < 0)
-		goto iRet_sig_motion_sysfs_create_link;
+		pr_err("[SSP]: %s - Could not create event symlink for %s", __func__, data->sig_motion_input_dev->name);
 
-#ifdef FEATURE_STEP_SENSOR
 	iRet = sensors_create_symlink(data->step_det_input_dev);
 	if (iRet < 0)
-		goto iRet_step_det_sysfs_create_link;
+		pr_err("[SSP]: %s - Could not create event symlink for %s", __func__, data->step_det_input_dev->name);
 
 	iRet = sensors_create_symlink(data->step_cnt_input_dev);
 	if (iRet < 0)
-		goto iRet_step_cnt_sysfs_create_link;
-#endif
+		pr_err("[SSP]: %s - Could not create event symlink for %s", __func__, data->step_cnt_input_dev->name);
 
 	return SUCCESS;
-
-#ifdef FEATURE_STEP_SENSOR
-iRet_step_cnt_sysfs_create_link:
-	sensors_remove_symlink(data->step_det_input_dev);
-iRet_step_det_sysfs_create_link:
-	sensors_remove_symlink(data->sig_motion_input_dev);
-#endif
-iRet_sig_motion_sysfs_create_link:
-	sensors_remove_symlink(data->gesture_input_dev);
-iRet_gesture_sysfs_create_link:
-	sensors_remove_symlink(data->temp_humi_input_dev);
-iRet_temp_humi_sysfs_create_link:
-	sensors_remove_symlink(data->prox_input_dev);
-iRet_prox_sysfs_create_link:
-	sensors_remove_symlink(data->light_input_dev);
-iRet_light_sysfs_create_link:
-	sensors_remove_symlink(data->pressure_input_dev);
-iRet_prs_sysfs_create_link:
-	sensors_remove_symlink(data->gyro_input_dev);
-iRet_gyro_sysfs_create_link:
-	sensors_remove_symlink(data->acc_input_dev);
-iRet_acc_sysfs_create_link:
-	pr_err("[SSP]: %s - could not create event symlink\n", __func__);
-
-	return FAIL;
 }
 
 void remove_event_symlink(struct ssp_data *data)
@@ -358,10 +357,10 @@ void remove_event_symlink(struct ssp_data *data)
 	sensors_remove_symlink(data->temp_humi_input_dev);
 	sensors_remove_symlink(data->gesture_input_dev);
 	sensors_remove_symlink(data->sig_motion_input_dev);
-#ifdef FEATURE_STEP_SENSOR
 	sensors_remove_symlink(data->step_det_input_dev);
 	sensors_remove_symlink(data->step_cnt_input_dev);
-#endif
+	if (data->meta_input_dev)
+		sensors_remove_symlink(data->meta_input_dev);
 }
 
 int initialize_input_dev(struct ssp_data *data)
@@ -376,6 +375,8 @@ int initialize_input_dev(struct ssp_data *data)
 	input_set_capability(data->acc_input_dev, EV_REL, REL_X);
 	input_set_capability(data->acc_input_dev, EV_REL, REL_Y);
 	input_set_capability(data->acc_input_dev, EV_REL, REL_Z);
+	input_set_capability(data->acc_input_dev, EV_REL, REL_DIAL);  /* time_hi */
+	input_set_capability(data->acc_input_dev, EV_REL, REL_MISC);  /* time_lo */
 
 	iRet = input_register_device(data->acc_input_dev);
 	if (iRet < 0) {
@@ -392,6 +393,11 @@ int initialize_input_dev(struct ssp_data *data)
 	input_set_capability(data->gyro_input_dev, EV_REL, REL_RX);
 	input_set_capability(data->gyro_input_dev, EV_REL, REL_RY);
 	input_set_capability(data->gyro_input_dev, EV_REL, REL_RZ);
+	input_set_capability(data->gyro_input_dev, EV_REL, REL_HWHEEL);
+	input_set_capability(data->gyro_input_dev, EV_REL, REL_DIAL);
+	input_set_capability(data->gyro_input_dev, EV_REL, REL_WHEEL);
+	input_set_capability(data->gyro_input_dev, EV_REL, REL_X);  /* time_hi */
+	input_set_capability(data->gyro_input_dev, EV_REL, REL_Y);  /* time_lo */
 	iRet = input_register_device(data->gyro_input_dev);
 	if (iRet < 0) {
 		input_free_device(data->gyro_input_dev);
@@ -494,7 +500,6 @@ int initialize_input_dev(struct ssp_data *data)
 	}
 	input_set_drvdata(data->sig_motion_input_dev, data);
 
-#ifdef FEATURE_STEP_SENSOR
 	data->step_det_input_dev = input_allocate_device();
 	if (data->step_det_input_dev == NULL)
 		goto err_initialize_step_det_input_dev;
@@ -520,18 +525,23 @@ int initialize_input_dev(struct ssp_data *data)
 		goto err_initialize_step_cnt_input_dev;
 	}
 	input_set_drvdata(data->step_cnt_input_dev, data);
+
+#ifndef CONFIG_CREATE_META_DEV_USING_SYSFS
+	iRet = initialize_meta_dev(data);
+	if (iRet < 0) {
+		input_unregister_device(data->step_cnt_input_dev);
+		goto err_initialize_step_cnt_input_dev;
+	}
 #endif
 
 	return SUCCESS;
 
-#ifdef FEATURE_STEP_SENSOR
 err_initialize_step_cnt_input_dev:
 	pr_err("[SSP]: %s - could not allocate step counter input device\n", __func__);
 	input_unregister_device(data->step_det_input_dev);
 err_initialize_step_det_input_dev:
 	pr_err("[SSP]: %s - could not allocate step detector input device\n", __func__);
 	input_unregister_device(data->sig_motion_input_dev);
-#endif
 err_initialize_sig_motion_input_dev:
 	pr_err("[SSP]: %s - could not allocate sig motion input device\n", __func__);
 	input_unregister_device(data->gesture_input_dev);
@@ -558,6 +568,33 @@ err_initialize_acc_input_dev:
 	return ERROR;
 }
 
+int initialize_meta_dev(struct ssp_data *data)
+{
+	int iRet;
+	data->meta_input_dev = input_allocate_device();
+	if (data->meta_input_dev == NULL) {
+		pr_err("[SSP]: %s - could not allocate meta input device\n", __func__);
+		return ERROR;
+	}
+	data->meta_input_dev->name = "meta_event";
+	input_set_capability(data->meta_input_dev, EV_REL, REL_HWHEEL); /* time_hi */
+	input_set_capability(data->meta_input_dev, EV_REL, REL_DIAL); /* time_lo */
+
+	iRet = input_register_device(data->meta_input_dev);
+	if (iRet < 0) {
+		pr_err("[SSP]: %s - could not register meta input device\n", __func__);
+		input_free_device(data->meta_input_dev);
+		return ERROR;
+	}
+	input_set_drvdata(data->meta_input_dev, data);
+
+	iRet = sensors_create_symlink(data->meta_input_dev);
+	if (iRet < 0)
+		return ERROR;
+
+	return SUCCESS;
+}
+
 void remove_input_dev(struct ssp_data *data)
 {
 	input_unregister_device(data->acc_input_dev);
@@ -568,8 +605,8 @@ void remove_input_dev(struct ssp_data *data)
 	input_unregister_device(data->prox_input_dev);
 	input_unregister_device(data->temp_humi_input_dev);
 	input_unregister_device(data->sig_motion_input_dev);
-#ifdef FEATURE_STEP_SENSOR
 	input_unregister_device(data->step_det_input_dev);
 	input_unregister_device(data->step_cnt_input_dev);
-#endif
+	if (data->meta_input_dev)
+		input_unregister_device(data->meta_input_dev);
 }

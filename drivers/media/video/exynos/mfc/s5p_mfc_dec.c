@@ -21,6 +21,7 @@
 #include <linux/workqueue.h>
 #include <linux/videodev2.h>
 #include <linux/videodev2_exynos_media.h>
+#include <linux/videodev2_exynos_media_ext.h>
 #include <media/videobuf2-core.h>
 
 #include "s5p_mfc_common.h"
@@ -382,6 +383,15 @@ static struct v4l2_queryctrl controls[] = {
 		.id = V4L2_CID_MPEG_MFC_GET_EXT_INFO,
 		.type = V4L2_CTRL_TYPE_INTEGER,
 		.name = "Get extra information",
+		.minimum = INT_MIN,
+		.maximum = INT_MAX,
+		.step = 1,
+		.default_value = 0,
+	},
+	{
+		.id = V4L2_CID_MPEG_MFC_SET_BUF_PROCESS_TYPE,
+		.type = V4L2_CTRL_TYPE_INTEGER,
+		.name = "Set buffer process type",
 		.minimum = INT_MIN,
 		.maximum = INT_MAX,
 		.step = 1,
@@ -1641,6 +1651,7 @@ static int vidioc_querybuf(struct file *file, void *priv,
 	return ret;
 }
 
+extern int no_order;
 /* Queue a buffer */
 static int vidioc_qbuf(struct file *file, void *priv, struct v4l2_buffer *buf)
 {
@@ -1665,7 +1676,7 @@ static int vidioc_qbuf(struct file *file, void *priv, struct v4l2_buffer *buf)
 			return -EIO;
 		}
 
-		if (dec->is_dts_mode) {
+		if (no_order && dec->is_dts_mode) {
 			mfc_debug(7, "timestamp: %ld %ld\n",
 					buf->timestamp.tv_sec,
 					buf->timestamp.tv_usec);
@@ -2100,6 +2111,9 @@ static int vidioc_s_ctrl(struct file *file, void *priv,
 			dec->sh_handle.fd = -1;
 			return -EINVAL;
 		}
+		break;
+	case V4L2_CID_MPEG_MFC_SET_BUF_PROCESS_TYPE:
+		ctx->buf_process_type = ctrl->value;
 		break;
 	default:
 		list_for_each_entry(ctx_ctrl, &ctx->ctrls, list) {
@@ -2906,6 +2920,7 @@ int s5p_mfc_init_dec_ctx(struct s5p_mfc_ctx *ctx)
 #ifdef CONFIG_ARM_EXYNOS5410_BUS_DEVFREQ
 	INIT_LIST_HEAD(&ctx->qos_list);
 #endif
+	INIT_LIST_HEAD(&ctx->ts_list);
 
 	INIT_LIST_HEAD(&dec->dpb_queue);
 	dec->dpb_queue_cnt = 0;

@@ -1253,6 +1253,17 @@ void free_hot_cold_page(struct page *page, int cold)
 	int migratetype;
 	int wasMlocked = __TestClearPageMlocked(page);
 
+#ifdef CONFIG_SCFS_LOWER_PAGECACHE_INVALIDATION
+	/*
+	   struct scfs_sb_info *sbi;
+
+	   if (PageScfslower(page) || PageNocache(page)) {
+	   sbi = SCFS_S(page->mapping->host->i_sb);
+	   sbi->scfs_lowerpage_reclaim_count++;
+	   }
+	 */
+#endif
+
 	if (!free_pages_prepare(page, 0))
 		return;
 
@@ -2233,7 +2244,7 @@ __alloc_pages_slowpath(gfp_t gfp_mask, unsigned int order,
 	bool sync_migration = false;
 	bool deferred_compaction = false;
 #ifdef CONFIG_ANDROID_WIP
-	unsigned long oom_invoke_timeout = jiffies + HZ/2;
+	unsigned long oom_invoke_timeout = jiffies + HZ/32;
 #endif
 
 	/*
@@ -2388,7 +2399,7 @@ rebalance:
 					goto nopage;
 			}
 #ifdef CONFIG_ANDROID_WIP
-			oom_invoke_timeout = jiffies + HZ/4;
+			oom_invoke_timeout = jiffies + HZ/32;
 #endif
 			goto restart;
 		}
@@ -5078,6 +5089,9 @@ void setup_per_zone_wmarks(void)
  */
 static void __meminit calculate_zone_inactive_ratio(struct zone *zone)
 {
+#ifdef CONFIG_FIX_INACTIVE_RATIO
+	zone->inactive_ratio = 1;
+#else
 	unsigned int gb, ratio;
 
 	/* Zone size in gigabytes */
@@ -5088,6 +5102,7 @@ static void __meminit calculate_zone_inactive_ratio(struct zone *zone)
 		ratio = 1;
 
 	zone->inactive_ratio = ratio;
+#endif
 }
 
 static void __meminit setup_per_zone_inactive_ratio(void)
@@ -5669,6 +5684,10 @@ static struct trace_print_flags pageflag_names[] = {
 #endif
 #ifdef CONFIG_MEMORY_FAILURE
 	{1UL << PG_hwpoison,		"hwpoison"	},
+#endif
+#ifdef CONFIG_SCFS_LOWER_PAGECACHE_INVALIDATION
+	{1UL << PG_scfslower,		"scfslower"	},
+	{1UL << PG_nocache,		"nocache"	},
 #endif
 	{-1UL,				NULL		},
 };

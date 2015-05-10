@@ -197,7 +197,7 @@ out:
 }
 __setup("sec_avc_log=", sec_avc_log_setup);
 
-#define BUF_SIZE 256
+#define BUF_SIZE 512
 void sec_debug_avc_log(char *fmt, ...)
 {
 	va_list args;

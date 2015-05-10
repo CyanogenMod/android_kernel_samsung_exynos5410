@@ -86,6 +86,12 @@ config ANDROID_INTF_ALARM_DEV
 	  Provides non-wakeup and rtc backed wakeup alarms based on rtc or
 	  elapsed realtime, and a non-wakeup alarm on the monotonic clock.
 	  Also exports the alarm interface to user-space.
+	  
+config SAMP_HOTNESS
+	bool "Kill hidden process by hotness"
+	default n
+	help
+	  This option change kill hidden process policy in LMK
 
 endif # if ANDROID
 

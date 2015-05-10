@@ -18,6 +18,7 @@
 
 #include <linux/videodev2.h>
 #include <linux/videodev2_exynos_media.h>
+#include <linux/videodev2_exynos_media_ext.h>
 #include <linux/workqueue.h>
 #include <linux/slab.h>
 #ifdef CONFIG_ARM_EXYNOS5410_BUS_DEVFREQ
@@ -64,7 +65,34 @@
 #define MFC_BASE_MASK		((1 << 17) - 1)
 
 #define DEC_LAST_FRAME		0x80000000
+#define MFC_MAX_INTERVAL	(2 * USEC_PER_SEC)
 
+/* Command ID for smc */
+#define SMC_PROTECTION_SET	0x81000000
+#define SMC_DRM_FW_LOADING	0x81000001
+#define SMC_SUPPORT		0x81000002
+#define SMC_DRM_MAKE_PGTABLE	0x81000003
+#define SMC_DRM_CLEAR_PGTABLE	0x81000004
+#define SMC_MEM_PROT_SET	0x81000005
+#define SMC_DRM_SECMEM_INFO	0x81000006
+
+/* Parameter for smc */
+#define SMC_PROTECTION_ENABLE	1
+#define SMC_PROTECTION_DISABLE	0
+
+enum {
+	FC_MFC_EXYNOS_ID_MFC_SH         = 0,
+	FC_MFC_EXYNOS_ID_FIMD_VIDEO	= 1,
+	FC_MFC_EXYNOS_ID_MFC_INPUT      = 2,
+	FC_MFC_EXYNOS_ID_MFC_FW         = 3,
+	FC_MFC_EXYNOS_ID_SECTBL         = 4,
+	FC_MFC_EXYNOS_ID_G2D_WFD        = 5,
+	FC_MFC_EXYNOS_ID_MFC_NFW        = 6,
+	FC_MFC_EXYNOS_ID_MFC_OUT	= 7,
+};
+
+/* Maximum number of temporal layers */
+#define VIDEO_MAX_TEMPORAL_LAYERS 7
 /**
  * enum s5p_mfc_inst_type - The type of an MFC device node.
  */
@@ -147,6 +175,15 @@ enum s5p_mfc_inst_drm_type {
 	MFCDRM_NONE = 0,
 	MFCDRM_MAGIC_KEY,
 	MFCDRM_SECURE_NODE,
+};
+
+enum mfc_buf_process_type {
+	MFCBUFPROC_DEFAULT 		= 0x0,
+	MFCBUFPROC_COPY 		= (1 << 0),
+	MFCBUFPROC_SHARE 		= (1 << 1),
+	MFCBUFPROC_META 		= (1 << 2),
+	MFCBUFPROC_ANBSHARE		= (1 << 3),
+	MFCBUFPROC_ANBSHARE_NV12L	= (1 << 4),
 };
 
 struct s5p_mfc_ctx;
@@ -321,6 +358,8 @@ struct s5p_mfc_dev {
 	int min_rate;
 	int curr_rate;
 #endif
+	int is_support_smc;
+	int skip_bus_waiting;
 };
 
 /**
@@ -356,6 +395,7 @@ struct s5p_mfc_h264_enc_params {
 	enum v4l2_mpeg_video_h264_hierarchical_coding_type hier_qp_type;
 	u8 hier_qp_layer;
 	u8 hier_qp_layer_qp[7];
+	u32 hier_qp_layer_bit[7];
 	u8 sei_gen_enable;
 	u8 sei_fp_curr_frame_0;
 	enum v4l2_mpeg_video_h264_sei_fp_arrangement_type \
@@ -550,10 +590,23 @@ struct dec_dpb_ref_info {
 	struct stored_dpb_info dpb[MFC_MAX_DPBS];
 };
 
+struct temporal_layer_info {
+	unsigned int temporal_layer_count;
+	unsigned int temporal_layer_bitrate[VIDEO_MAX_TEMPORAL_LAYERS];
+};
+
 struct mfc_user_shared_handle {
 	int fd;
 	struct ion_handle *ion_handle;
 	void *virt;
+};
+
+#define MFC_TIME_INDEX		8
+struct mfc_timestamp {
+	struct list_head list;
+	struct timeval timestamp;
+	int index;
+	int interval;
 };
 
 struct s5p_mfc_dec {
@@ -732,6 +785,14 @@ struct s5p_mfc_ctx {
 	int avg_framerate;
 	int frame_count;
 	struct timeval last_timestamp;
+	int qp_min_change;
+	int qp_max_change;
+	int buf_process_type;
+
+	struct mfc_timestamp ts_array[MFC_TIME_INDEX];
+	struct list_head ts_list;
+	int ts_count;
+	int ts_is_full;
 };
 
 #define fh_to_mfc_ctx(x)	\
@@ -802,6 +863,8 @@ static inline unsigned int mfc_version(struct s5p_mfc_dev *dev)
 /* Extra information for Decoder */
 #define	DEC_SET_DYNAMIC_DPB		(1 << 1)
 
+#define MFC_QOS_FLAG_NODATA		0xFFFFFFFF
+
 struct s5p_mfc_fmt {
 	char *name;
 	u32 fourcc;
@@ -811,7 +874,7 @@ struct s5p_mfc_fmt {
 };
 
 int get_framerate(struct timeval *to, struct timeval *from);
-
+int get_framerate_by_interval(int interval);
 static inline int clear_hw_bit(struct s5p_mfc_ctx *ctx)
 {
 	struct s5p_mfc_dev *dev = ctx->dev;

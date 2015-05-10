@@ -124,7 +124,7 @@ static unsigned int exynos_pd_gscl_clock_control(bool on)
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"  /* gscl0, gscl1 */
-static void exynos_gscl_ctrl_save(unsigned int *gscl0, unsigned int *gscl1, bool on)
+static noinline void exynos_gscl_ctrl_save(unsigned int *gscl0, unsigned int *gscl1, bool on)
 {
 	unsigned int tmp;
 

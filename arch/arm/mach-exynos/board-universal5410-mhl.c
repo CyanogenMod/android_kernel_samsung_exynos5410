@@ -152,6 +152,20 @@ static void sii8240_reset(void)
 	usleep_range(10000, 20000);
 }
 
+static bool sii8240_vbus_present(void)
+{
+	union power_supply_propval value;
+
+	psy_do_property("sec-charger", get, POWER_SUPPLY_PROP_ONLINE, value);
+	pr_info("sii8240: sec-charger : %d\n", value.intval);
+
+	if (value.intval == POWER_SUPPLY_TYPE_BATTERY ||
+			value.intval == POWER_SUPPLY_TYPE_WPC)
+		return false;
+	else
+		return true;
+}
+
 #ifdef __MHL_NEW_CBUS_MSC_CMD__
 static void sii9234_vbus_present(bool on, int value)
 {
@@ -245,11 +259,7 @@ static void muic_mhl_cb(bool otg_enable, int plim)
 		current_cable_type = POWER_SUPPLY_TYPE_BATTERY;
 
 	if (otg_enable) {
-		psy_do_property("sec-charger", get,
-					POWER_SUPPLY_PROP_ONLINE, value);
-		pr_info("sec-charger : %d\n", value.intval);
-		if (value.intval == POWER_SUPPLY_TYPE_BATTERY ||
-				value.intval == POWER_SUPPLY_TYPE_WPC) {
+		if(!sii8240_vbus_present()) {
 			if (!lpcharge) {
 				otg_control(true);
 				current_cable_type = POWER_SUPPLY_TYPE_BATTERY;
@@ -306,7 +316,7 @@ static struct sii8240_platform_data sii8240_pdata = {
 #if defined(__MHL_NEW_CBUS_MSC_CMD__)
 	.vbus_present = sii9234_vbus_present,
 #else
-	.vbus_present = NULL,
+	.vbus_present = sii8240_vbus_present,
 #endif
 #ifdef CONFIG_SAMSUNG_MHL_UNPOWERED
 	.get_vbus_status = sii9234_get_vbus_status,

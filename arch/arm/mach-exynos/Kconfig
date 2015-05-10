@@ -1092,6 +1092,12 @@ source "arch/arm/mach-exynos/Kconfig.local"
 
 endif
 
+config SEC_MISC
+	bool "Samsung TN Misc Feature"
+	default n
+	help
+	  Samsung TN Misc extension Feature. Do additional work when Misc.
+
 comment "Qualcomm Modem Feature"
 
 config QC_MODEM
@@ -1130,6 +1136,7 @@ config QC_MODEM_ADONIS
 	select MSM_RMNET_USB
 	select DIAG_CHAR
 	select MDM_HSIC_PM
+	select USB_QCOM_KS_BRIDGE
 
 endchoice
 endif

@@ -1842,18 +1842,32 @@ static void sec_bat_monitor_work(
 	struct sec_battery_info *battery =
 		container_of(work, struct sec_battery_info,
 		monitor_work.work);
-
+	static struct timespec old_ts;
+	struct timespec c_ts;
 	dev_dbg(battery->dev, "%s: Start\n", __func__);
-
+#if defined(ANDROID_ALARM_ACTIVATED)
+	c_ts = ktime_to_timespec(alarm_get_elapsed_realtime());
+#else
+	c_ts = ktime_to_timespec(ktime_get_boottime());
+#endif
 /*#if !defined(ANDROID_ALARM_ACTIVATED)
 	alarm_cancel(&battery->polling_alarm);
 #endif *//* ANDROID_ALARM_ACTIVATED */
 
 	/* monitor once after wakeup */
-	if (battery->polling_in_sleep)
-		battery->polling_in_sleep = false;
-
-	sec_bat_get_battery_info(battery);
+	if (battery->polling_in_sleep) {
+	    battery->polling_in_sleep = false;
+		if (battery->status == POWER_SUPPLY_STATUS_DISCHARGING) {
+		    if ((unsigned long)(c_ts.tv_sec - old_ts.tv_sec) < 10 * 60) {
+			   pr_info("Skip monitor_work(%ld)\n",
+			   c_ts.tv_sec - old_ts.tv_sec);
+			   goto skip_monitor;
+			}
+		}
+	}
+	/* update last monitor time */
+	old_ts = c_ts;
+        sec_bat_get_battery_info(battery);
 
 	/* 0. test mode */
 	if (battery->test_activated) {
@@ -1900,6 +1914,7 @@ continue_monitor:
 
 	dev_info(battery->dev,
 			"%s: Call sec_bat_set_polling\n", __func__);
+	skip_monitor:
 	sec_bat_set_polling(battery);
 
 	if (battery->capacity <= 0)
@@ -2340,7 +2355,9 @@ ssize_t sec_bat_store_attrs(
 			union power_supply_propval value;
 			dev_info(battery->dev,
 				"%s: siop level: %d\n", __func__, x);
-			if (x >= 0 && x <= 100)
+			if(battery->capacity <= 5)
+				battery->siop_level = 100;
+			else if (x >= 0 && x <= 100)
 				battery->siop_level = x;
 			else
 				battery->siop_level = 100;

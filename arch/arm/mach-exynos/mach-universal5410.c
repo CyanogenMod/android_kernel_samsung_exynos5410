@@ -371,7 +371,7 @@ struct modem_boot_spi_platform_data modem_boot_spi_pdata = {
 
 static struct spi_board_info modem_spi_board_info[] = {
 	{
-		.modalias = "modem_boot_spi",
+		.modalias = MODEM_BOOT_DEV_SPI,
 		.controller_data = (void *)GPIO_MODEM_SPI_CSN,
 		.platform_data = &modem_boot_spi_pdata,
 		.max_speed_hz = (2 * 1000 * 1000),

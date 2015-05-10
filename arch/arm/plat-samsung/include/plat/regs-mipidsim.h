@@ -36,8 +36,8 @@ register */
 #define S5P_DSIM_PAYLOAD	(0x38)	/* Payload FIFO register */
 #define S5P_DSIM_RXFIFO		(0x3c)	/* Read FIFO register */
 #define S5P_DSIM_FIFOTHLD	(0x40)	/* FIFO threshold level register */
-#define S5P_DSIM_FIFOCTRL	(0x44)	/* FIFO status and control register
-*/
+#define S5P_DSIM_FIFOCTRL	(0x44)	/* FIFO status and control register */
+#define DSIM_INIT_SFR       (1 << 3)
 
 /* PLL ctrl register */
 #define S5P_DSIM_PLLCTRL	(0x4c)  /* PLL control register */
