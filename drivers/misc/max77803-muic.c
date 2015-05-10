@@ -2658,7 +2658,7 @@ static int max77803_muic_handle_detach(struct max77803_muic_info *info, int irq)
 			info->cable_type = CABLE_TYPE_DESKDOCK_MUIC;
 			break;
 		}
-		if (mdata->dock_cb)
+		if (info->adc != ADC_DESKDOCK && mdata->dock_cb)
 			mdata->dock_cb(MAX77803_MUIC_DOCK_DETACHED);
 		break;
 	case CABLE_TYPE_CARDOCK_MUIC:
@@ -2670,7 +2670,7 @@ static int max77803_muic_handle_detach(struct max77803_muic_info *info, int irq)
 			info->cable_type = CABLE_TYPE_CARDOCK_MUIC;
 			break;
 		}
-		if (mdata->dock_cb)
+		if (info->adc != ADC_DESKDOCK && mdata->dock_cb)
 			mdata->dock_cb(MAX77803_MUIC_DOCK_DETACHED);
 		break;
 	case CABLE_TYPE_TA_MUIC:
@@ -3121,11 +3121,15 @@ static void max77803_muic_init_detect(struct work_struct *work)
 static int max77803_muic_read_otg_id(struct max77803_muic_info *info)
 {
 	int ret;
-	u8 val;
+	u8 val,adc1k;
 
 	max77803_read_reg(info->muic, MAX77803_MUIC_REG_STATUS1, &val);
 	ret = val & STATUS1_ADC_MASK;
-	dev_info(info->dev, "func:%s ret:%d val:%x\n", __func__, ret, val);
+	adc1k = (val & STATUS1_ADC1K_MASK) ? 1 : 0;
+	dev_info(info->dev, "func:%s ret:%d val:%x adc1k:%x\n", __func__, ret, val, adc1k);
+
+	if(adc1k)
+		return 1;
 
 	return ret;
 }
@@ -3398,6 +3402,7 @@ static int __devinit max77803_muic_probe(struct platform_device *pdev)
 	struct max77803_muic_info *info;
 	struct input_dev *input;
 	int ret;
+	u8 val;
 
 	pr_info("func:%s\n", __func__);
 
@@ -3599,6 +3604,10 @@ static int __devinit max77803_muic_probe(struct platform_device *pdev)
 	INIT_DELAYED_WORK(&info->mhl_work, max77803_muic_mhl_detect);
 	schedule_delayed_work(&info->mhl_work, msecs_to_jiffies(25000));
 #endif
+
+	val = (0 << CTRL3_JIGSET_SHIFT) | (0 << CTRL3_BOOTSET_SHIFT);
+	ret = max77803_update_reg(info->muic, MAX77803_MUIC_REG_CTRL3, val,
+			CTRL3_JIGSET_MASK | CTRL3_BOOTSET_MASK);
 
 	return 0;
 

@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: wl_cfgp2p.c 391443 2013-03-18 07:53:46Z $
+ * $Id: wl_cfgp2p.c 424074 2013-09-16 06:01:12Z $
  *
  */
 #include <typedefs.h>
@@ -782,7 +782,8 @@ exit:
 s32
 wl_cfgp2p_escan(struct wl_priv *wl, struct net_device *dev, u16 active,
 	u32 num_chans, u16 *channels,
-	s32 search_state, u16 action, u32 bssidx, struct ether_addr *tx_dst_addr)
+	s32 search_state, u16 action, u32 bssidx, struct ether_addr *tx_dst_addr,
+	p2p_scan_purpose_t p2p_scan_purpose)
 {
 	s32 ret = BCME_OK;
 	s32 memsize;
@@ -863,26 +864,31 @@ wl_cfgp2p_escan(struct wl_priv *wl, struct net_device *dev, u16 active,
 
 	eparams->params.home_time = htod32(P2PAPI_SCAN_HOME_TIME_MS);
 
-	/* SOCIAL_CHAN_CNT + 1 takes care of the Progressive scan supported by
-	 * the supplicant
-	 */
-	if ((num_chans == SOCIAL_CHAN_CNT) || (num_chans == SOCIAL_CHAN_CNT + 1))
-		eparams->params.active_time = htod32(P2PAPI_SCAN_SOCIAL_DWELL_TIME_MS);
-	else if (num_chans == AF_PEER_SEARCH_CNT)
-		eparams->params.active_time = htod32(P2PAPI_SCAN_AF_SEARCH_DWELL_TIME_MS);
-	else if (wl_get_drv_status_all(wl, CONNECTED))
-		eparams->params.active_time = -1;
-	else
-		eparams->params.active_time = htod32(P2PAPI_SCAN_DWELL_TIME_MS);
-	eparams->params.nprobes = htod32((eparams->params.active_time /
-		P2PAPI_SCAN_NPROBS_TIME_MS));
+	switch (p2p_scan_purpose) {
+		case P2P_SCAN_SOCIAL_CHANNEL:
+			eparams->params.active_time = htod32(P2PAPI_SCAN_SOCIAL_DWELL_TIME_MS);
+			break;
+		case P2P_SCAN_AFX_PEER_NORMAL:
+		case P2P_SCAN_AFX_PEER_REDUCED:
+			eparams->params.active_time = htod32(P2PAPI_SCAN_AF_SEARCH_DWELL_TIME_MS);
+			break;
+		case P2P_SCAN_CONNECT_TRY:
+			eparams->params.active_time = htod32(WL_SCAN_CONNECT_DWELL_TIME_MS);
+			break;
+		default :
+			if (wl_get_drv_status_all(wl, CONNECTED))
+				eparams->params.active_time = -1;
+			else
+				eparams->params.active_time = htod32(P2PAPI_SCAN_DWELL_TIME_MS);
+			break;
+	}
 
-	/* Override scan params to find a peer for a connection */
-	if (num_chans == 1) {
-		eparams->params.active_time = htod32(WL_SCAN_CONNECT_DWELL_TIME_MS);
+	if (p2p_scan_purpose == P2P_SCAN_CONNECT_TRY)
 		eparams->params.nprobes = htod32(eparams->params.active_time /
 			WL_SCAN_JOIN_PROBE_INTERVAL_MS);
-	}
+	else
+		eparams->params.nprobes = htod32((eparams->params.active_time /
+			P2PAPI_SCAN_NPROBS_TIME_MS));
 
 	if (eparams->params.nprobes <= 0)
 		eparams->params.nprobes = 1;
@@ -932,6 +938,7 @@ wl_cfgp2p_act_frm_search(struct wl_priv *wl, struct net_device *ndev,
 	s32 ret = 0;
 	u32 chan_cnt = 0;
 	u16 *default_chan_list = NULL;
+	p2p_scan_purpose_t p2p_scan_purpose = P2P_SCAN_AFX_PEER_NORMAL;
 	if (!p2p_is_on(wl) || ndev == NULL || bssidx == WL_INVALID)
 		return -BCME_ERROR;
 	CFGP2P_ERR((" Enter\n"));
@@ -960,7 +967,7 @@ wl_cfgp2p_act_frm_search(struct wl_priv *wl, struct net_device *ndev,
 	}
 	ret = wl_cfgp2p_escan(wl, ndev, true, chan_cnt,
 		default_chan_list, WL_P2P_DISC_ST_SEARCH,
-		WL_SCAN_ACTION_START, bssidx, tx_dst_addr);
+		WL_SCAN_ACTION_START, bssidx, NULL, p2p_scan_purpose);
 	kfree(default_chan_list);
 exit:
 	return ret;
@@ -1807,7 +1814,7 @@ wl_cfgp2p_tx_action_frame(struct wl_priv *wl, struct net_device *dev,
 	timeout = wait_for_completion_timeout(&wl->send_af_done,
 		msecs_to_jiffies(af_params->dwell_time + WL_AF_TX_EXTRA_TIME_MAX));
 
-	if (timeout > 0 && wl_get_p2p_status(wl, ACTION_TX_COMPLETED)) {
+	if (timeout >= 0 && wl_get_p2p_status(wl, ACTION_TX_COMPLETED)) {
 		CFGP2P_INFO(("tx action frame operation is completed\n"));
 		ret = BCME_OK;
 	} else {
@@ -2200,20 +2207,47 @@ wl_cfgp2p_retreive_p2pattrib(void *buf, u8 element_id)
 }
 
 #define P2P_GROUP_CAPAB_GO_BIT	0x01
+
+u8*
+wl_cfgp2p_find_attrib_in_all_p2p_Ies(u8 *parse, u32 len, u32 attrib)
+{
+	bcm_tlv_t *ie;
+	u8* pAttrib;
+
+	CFGP2P_INFO(("Starting parsing parse %p attrib %d remaining len %d ", parse, attrib, len));
+	while ((ie = bcm_parse_tlvs(parse, (int)len, DOT11_MNG_VS_ID))) {
+		if (wl_cfgp2p_is_p2p_ie((uint8*)ie, &parse, &len) == TRUE) {
+			/* Have the P2p ie. Now check for attribute */
+			if ((pAttrib = wl_cfgp2p_retreive_p2pattrib(parse, attrib)) != NULL) {
+				CFGP2P_INFO(("P2P attribute %d was found at parse %p",
+					attrib, parse));
+				return pAttrib;
+			}
+			else {
+				parse += (ie->len + TLV_HDR_LEN);
+				len -= (ie->len + TLV_HDR_LEN);
+				CFGP2P_INFO(("P2P Attribute %d not found Moving parse"
+					" to %p len to %d", attrib, parse, len));
+			}
+		}
+		else {
+			/* It was not p2p IE. parse will get updated automatically to next TLV */
+			CFGP2P_INFO(("IT was NOT P2P IE parse %p len %d", parse, len));
+		}
+	}
+	CFGP2P_ERR(("P2P attribute %d was NOT found", attrib));
+	return NULL;
+}
+
 u8 *
 wl_cfgp2p_retreive_p2p_dev_addr(wl_bss_info_t *bi, u32 bi_length)
 {
-	wifi_p2p_ie_t * p2p_ie = NULL;
 	u8 *capability = NULL;
 	bool p2p_go	= 0;
 	u8 *ptr = NULL;
 
-	if (!(p2p_ie = wl_cfgp2p_find_p2pie(((u8 *) bi) + bi->ie_offset, bi->ie_length))) {
-		WL_ERR(("P2P IE not found"));
-		return NULL;
-	}
-
-	if (!(capability = wl_cfgp2p_retreive_p2pattrib(p2p_ie, P2P_SEID_P2P_INFO))) {
+	if ((capability = wl_cfgp2p_find_attrib_in_all_p2p_Ies(((u8 *) bi) + bi->ie_offset,
+	bi->ie_length, P2P_SEID_P2P_INFO)) == NULL) {
 		WL_ERR(("P2P Capability attribute not found"));
 		return NULL;
 	}
@@ -2225,11 +2259,13 @@ wl_cfgp2p_retreive_p2p_dev_addr(wl_bss_info_t *bi, u32 bi_length)
 	}
 
 	/* In probe responses, DEVICE INFO attribute will be present */
-	if (!(ptr = wl_cfgp2p_retreive_p2pattrib(p2p_ie, P2P_SEID_DEV_INFO))) {
+	if (!(ptr = wl_cfgp2p_find_attrib_in_all_p2p_Ies(((u8 *) bi) + bi->ie_offset,
+	bi->ie_length,  P2P_SEID_DEV_INFO))) {
 		/* If DEVICE_INFO is not found, this might be a beacon frame.
 		 * check for DEVICE_ID in the beacon frame.
 		 */
-		ptr = wl_cfgp2p_retreive_p2pattrib(p2p_ie, P2P_SEID_DEV_ID);
+		ptr = wl_cfgp2p_find_attrib_in_all_p2p_Ies(((u8 *) bi) + bi->ie_offset,
+		bi->ie_length,  P2P_SEID_DEV_ID);
 	}
 
 	if (!ptr)

@@ -2233,7 +2233,7 @@ __alloc_pages_slowpath(gfp_t gfp_mask, unsigned int order,
 	bool sync_migration = false;
 	bool deferred_compaction = false;
 #ifdef CONFIG_ANDROID_WIP
-	unsigned long start_tick = jiffies;
+	unsigned long oom_invoke_timeout = jiffies + HZ/2;
 #endif
 
 	/*
@@ -2344,7 +2344,12 @@ rebalance:
 	 * If we failed to make any progress reclaiming, then we are
 	 * running out of options and have to consider going OOM
 	 */
-	if (!did_some_progress) {
+#ifdef CONFIG_ANDROID_WIP
+#define SHOULD_CONSIDER_OOM !did_some_progress || time_after(jiffies, oom_invoke_timeout)
+#else
+#define SHOULD_CONSIDER_OOM !did_some_progress
+#endif
+	if (SHOULD_CONSIDER_OOM) {
 		if ((gfp_mask & __GFP_FS) && !(gfp_mask & __GFP_NORETRY)) {
 			if (oom_killer_disabled)
 				goto nopage;
@@ -2353,7 +2358,10 @@ rebalance:
 			    !(gfp_mask & __GFP_NOFAIL))
 				goto nopage;
 #ifdef CONFIG_ANDROID_WIP
-			pr_err("about to invoke oom-killer (elapsed : %lu)\n", jiffies-start_tick);
+			if (did_some_progress)
+				pr_info("time's up : calling "
+						"__alloc_pages_may_oom(o:%d gfp:0x%x)\n", order, gfp_mask);
+
 #endif
 			page = __alloc_pages_may_oom(gfp_mask, order,
 					zonelist, high_zoneidx,
@@ -2379,7 +2387,9 @@ rebalance:
 				if (high_zoneidx < ZONE_NORMAL)
 					goto nopage;
 			}
-
+#ifdef CONFIG_ANDROID_WIP
+			oom_invoke_timeout = jiffies + HZ/4;
+#endif
 			goto restart;
 		}
 	}

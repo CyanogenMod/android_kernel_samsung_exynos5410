@@ -46,6 +46,9 @@
 #define SLEEP	(0)
 #define RUNTIME	(1)
 
+#define LPA_NOISE
+#define USE_FORCED_IO_INIT
+
 struct i2s_dai {
 	/* Platform device for this DAI */
 	struct platform_device *pdev;
@@ -599,12 +602,47 @@ static int i2s_set_fmt(struct snd_soc_dai *dai,
 	return 0;
 }
 
+#ifdef USE_FORCED_IO_INIT
+static void i2s_io_init(struct i2s_dai *i2s)
+{
+	struct platform_device *pdev;
+	struct s3c_audio_pdata *i2s_pdata;
+	u32 con = readl(i2s->addr + I2SCON);
+
+	if (is_secondary(i2s))
+		i2s = i2s->pri_dai;
+
+	pdev = i2s->pdev;
+	i2s_pdata = pdev->dev.platform_data;
+
+	if (i2s_pdata->cfg_gpio && i2s_pdata->cfg_gpio(pdev))
+		dev_err(&pdev->dev, "Unable to configure gpio\n");
+
+	if (i2s->quirks & QUIRK_NEED_RSTCLR)
+		writel(con | CON_RSTCLR, i2s->addr + I2SCON);
+
+#ifdef LPA_NOISE
+	if (readl(i2s->audss_base + EXYNOS_CLKDIV_AUDSS_OFFSET) != 0xf13 ||
+		readl(i2s->audss_base + EXYNOS_CLKSRC_AUDSS_OFFSET) != 0x1) {
+		writel(0xf13, i2s->audss_base + EXYNOS_CLKDIV_AUDSS_OFFSET);
+		writel(0x01, i2s->audss_base + EXYNOS_CLKSRC_AUDSS_OFFSET);
+	}
+#endif
+	pr_info("%s: i2smod %x, i2scon %x\n",
+			__func__, readl(i2s->addr + I2SMOD),
+			readl(i2s->addr + I2SCON));
+}
+#endif
+
 static int i2s_hw_params(struct snd_pcm_substream *substream,
 	struct snd_pcm_hw_params *params, struct snd_soc_dai *dai)
 {
 	struct i2s_dai *i2s = to_info(dai);
 	u32 mod = readl(i2s->addr + I2SMOD);
 
+#ifdef USE_FORCED_IO_INIT
+	i2s_io_init(i2s);
+#endif
 	if (!is_secondary(i2s))
 		mod &= ~(MOD_DC2_EN | MOD_DC1_EN);
 
@@ -639,7 +677,6 @@ static int i2s_hw_params(struct snd_pcm_substream *substream,
 	else
 		mod &= ~MOD_BLCP_MASK;
 
-	if (is_manager(i2s))
 		mod &= ~MOD_BLC_MASK;
 
 	switch (params_format(params)) {
@@ -648,7 +685,7 @@ static int i2s_hw_params(struct snd_pcm_substream *substream,
 			mod |= MOD_BLCS_8BIT;
 		else
 			mod |= MOD_BLCP_8BIT;
-		if (is_manager(i2s))
+
 			mod |= MOD_BLC_8BIT;
 		break;
 	case SNDRV_PCM_FORMAT_S16_LE:
@@ -656,7 +693,7 @@ static int i2s_hw_params(struct snd_pcm_substream *substream,
 			mod |= MOD_BLCS_16BIT;
 		else
 			mod |= MOD_BLCP_16BIT;
-		if (is_manager(i2s))
+
 			mod |= MOD_BLC_16BIT;
 		break;
 	case SNDRV_PCM_FORMAT_S24_LE:
@@ -664,7 +701,7 @@ static int i2s_hw_params(struct snd_pcm_substream *substream,
 			mod |= MOD_BLCS_24BIT;
 		else
 			mod |= MOD_BLCP_24BIT;
-		if (is_manager(i2s))
+
 			mod |= MOD_BLC_24BIT;
 		break;
 	default:
@@ -695,8 +732,23 @@ static void audss_reg_save(struct i2s_dai *i2s)
 					  EXYNOS_CLKSRC_AUDSS_OFFSET);
 	i2s->suspend_audss_clkdiv = readl(i2s->audss_base +
 					  EXYNOS_CLKDIV_AUDSS_OFFSET);
+#ifndef LPA_NOISE
 	i2s->suspend_audss_clkgate = readl(i2s->audss_base +
 					   EXYNOS_CLKGATE_AUDSS_OFFSET);
+#endif
+
+#ifdef LPA_NOISE
+	if(readl(i2s->audss_base + EXYNOS_CLKDIV_AUDSS_OFFSET) != 0xf13 ||
+		readl(i2s->audss_base + EXYNOS_CLKSRC_AUDSS_OFFSET) != 0x1)
+	{
+		i2s->suspend_audss_clksrc = 0x1;
+		i2s->suspend_audss_clkdiv = 0xf13;
+	}
+#endif
+	pr_info("CLKDIV : 0x%08x, CLKGATE : 0x%08x, CLKSRC : 0x%08x\n",
+			readl(i2s->audss_base + EXYNOS_CLKDIV_AUDSS_OFFSET),
+			readl(i2s->audss_base + EXYNOS_CLKGATE_AUDSS_OFFSET),
+			readl(i2s->audss_base + EXYNOS_CLKSRC_AUDSS_OFFSET));
 
 	pr_info("Registers of Audio Subsystem are saved\n");
 
@@ -707,14 +759,29 @@ static void audss_reg_restore(struct i2s_dai *i2s)
 {
 	if ((i2s->pdev->id != 0) && (i2s->pdev->id != SAMSUNG_I2S_SECOFF))
 		return;
-
+#ifndef LPA_NOISE
 	writel(i2s->suspend_audss_clkgate,
 	       i2s->audss_base + EXYNOS_CLKGATE_AUDSS_OFFSET);
+#endif
 	writel(i2s->suspend_audss_clkdiv,
 	       i2s->audss_base + EXYNOS_CLKDIV_AUDSS_OFFSET);
 	writel(i2s->suspend_audss_clksrc,
 	       i2s->audss_base + EXYNOS_CLKSRC_AUDSS_OFFSET);
 
+#ifdef LPA_NOISE
+	if(readl(i2s->audss_base + EXYNOS_CLKDIV_AUDSS_OFFSET) != 0xf13 ||
+		readl(i2s->audss_base + EXYNOS_CLKSRC_AUDSS_OFFSET) != 0x1)
+	{
+		writel(0xf13, i2s->audss_base + EXYNOS_CLKDIV_AUDSS_OFFSET);
+		writel(0x01, i2s->audss_base + EXYNOS_CLKSRC_AUDSS_OFFSET);
+	}
+#endif
+	pr_info("CLKDIV : 0x%08x, CLKGATE : 0x%08x, CLKSRC : 0x%08x\n",
+			readl(i2s->audss_base + EXYNOS_CLKDIV_AUDSS_OFFSET),
+			readl(i2s->audss_base + EXYNOS_CLKGATE_AUDSS_OFFSET),
+			readl(i2s->audss_base + EXYNOS_CLKSRC_AUDSS_OFFSET));
+
+	pr_info("Registers of Audio Subsystem are restore\n");
 	return;
 }
 
@@ -822,7 +889,9 @@ void audss_disable(void *i2s_info)
 #ifdef CONFIG_SND_SAMSUNG_USE_IDMA
 		clk_disable(i2s->srpclk);
 #endif
+#ifndef LPA_NOISE
 		audss_reg_save(i2s);
+#endif
 	}
 
 	spin_unlock(&audss_lock);
@@ -833,10 +902,6 @@ void i2s_enable(struct snd_soc_dai *dai, int pm_mode)
 	struct i2s_dai *i2s = to_info(dai);
 	struct i2s_dai *other = i2s->pri_dai ? : i2s->sec_dai;
 	unsigned long flags;
-
-	struct platform_device *pdev = i2s->pri_dai ?
-				       i2s->pri_dai->pdev : i2s->pdev;
-	struct s3c_audio_pdata *i2s_pdata = pdev->dev.platform_data;
 
 	spin_lock_irqsave(&lock, flags);
 
@@ -909,7 +974,9 @@ void i2s_disable(struct snd_soc_dai *dai, int pm_mode)
 
 		if (pm_mode == SLEEP) {
 			i2s_reg_save(i2s);
+#ifndef LPA_NOISE
 			audss_reg_save(i2s);
+#endif
 		}
 
 		pm_runtime_ctl(i2s, false);
@@ -918,7 +985,7 @@ void i2s_disable(struct snd_soc_dai *dai, int pm_mode)
 
 /* We set constraints on the substream acc to the version of I2S */
 static int i2s_startup(struct snd_pcm_substream *substream,
-	  struct snd_soc_dai *dai)
+         struct snd_soc_dai *dai)
 {
 	i2s_enable(dai, RUNTIME);
 
@@ -936,7 +1003,11 @@ static int config_setup(struct i2s_dai *i2s)
 	struct i2s_dai *other = i2s->pri_dai ? : i2s->sec_dai;
 	unsigned rfs, bfs, blc;
 	u32 psr;
-
+#ifdef USE_FORCED_IO_INIT
+	u32 con = readl(i2s->addr + I2SCON);
+	if (i2s->quirks & QUIRK_NEED_RSTCLR)
+		writel(con | CON_RSTCLR, i2s->addr + I2SCON);
+#endif
 	blc = get_blc(i2s);
 
 	bfs = i2s->bfs;
@@ -973,6 +1044,11 @@ static int config_setup(struct i2s_dai *i2s)
 		return -EAGAIN;
 	}
 
+#ifdef CONFIG_SND_SAMSUNG_HQ
+	set_bfs(i2s, bfs);
+	set_rfs(i2s, rfs);
+#endif
+
 	/* Don't bother RFS, BFS & PSR in Slave mode */
 	if (is_slave(i2s))
 		return 0;
@@ -991,40 +1067,6 @@ static int config_setup(struct i2s_dai *i2s)
 	return 0;
 }
 
-#if 0 // unused
-static int i2s_lrsync(struct i2s_dai *i2s)
-{
-	u32 con;
-	unsigned long timeout;
-
-	pr_debug("Entered %s\n", __func__);
-
-	/* Wait max 5ms */
-	timeout = jiffies + (HZ / 200);
-
-	while (!time_after(jiffies, timeout)) {
-		con = readl(i2s->addr + I2SCON);
-		if (con & CON_LRINDEX)
-			break;
-
-		cpu_relax();
-	}
-
-	if (!(con & CON_LRINDEX)) {
-		printk(KERN_ERR "%s: timeout\n", __func__);
-		printk(" I2SCON: %x, I2SMOD: %x, I2SPSR: %x\n",
-			readl(i2s->addr + I2SCON), readl(i2s->addr + I2SMOD),
-			readl(i2s->addr + I2SPSR));
-		printk("AUDSS_CLKSRC=%x, AUDSS_CLKDIV=%x, AUDSS_CLKGATE=%x\n",
-			 readl(EXYNOS_CLKSRC_AUDSS), readl(EXYNOS_CLKDIV_AUDSS),
-			 readl(EXYNOS_CLKGATE_AUDSS));
-		return -ETIMEDOUT;
-	}
-
-	return 0;
-}
-#endif
-
 static int i2s_trigger(struct snd_pcm_substream *substream,
 	int cmd, struct snd_soc_dai *dai)
 {
@@ -1038,14 +1080,6 @@ static int i2s_trigger(struct snd_pcm_substream *substream,
 	case SNDRV_PCM_TRIGGER_START:
 	case SNDRV_PCM_TRIGGER_RESUME:
 	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
-#if 0
-		if (is_slave(i2s)) {
-			ret = i2s_lrsync(i2s);
-			if (ret)
-				goto exit_err;
-		}
-#endif
-
 		spin_lock_irqsave(&lock, flags);
 
 		if (config_setup(i2s)) {
@@ -1063,7 +1097,6 @@ static int i2s_trigger(struct snd_pcm_substream *substream,
 	case SNDRV_PCM_TRIGGER_STOP:
 	case SNDRV_PCM_TRIGGER_SUSPEND:
 	case SNDRV_PCM_TRIGGER_PAUSE_PUSH:
-
 		spin_lock_irqsave(&lock, flags);
 
 		if (capture) {
@@ -1077,7 +1110,6 @@ static int i2s_trigger(struct snd_pcm_substream *substream,
 		break;
 	}
 
-/* exit_err: // unused label due to the above hack (#if 0 ... #endif) */
 	return ret;
 }
 
@@ -1194,16 +1226,24 @@ err0:
 #ifdef CONFIG_PM
 static int i2s_suspend(struct snd_soc_dai *dai)
 {
-	if (dai->active)
+	pr_info("%s ++ : %s\n", __func__, dai->name);
+	if (dai->active) {
+		pr_info("%s && \n", __func__);
 		i2s_disable(dai, SLEEP);
+	}
+	pr_info("%s --\n", __func__);
 
 	return 0;
 }
 
 static int i2s_resume(struct snd_soc_dai *dai)
 {
-	if (dai->active)
+	pr_info("%s ++ : %s\n", __func__, dai->name);
+	if (dai->active) {
+		pr_info("%s ##\n", __func__);
 		i2s_enable(dai, SLEEP);
+	}
+	pr_info("%s --\n", __func__);
 
 	return 0;
 }
@@ -1216,9 +1256,6 @@ static int samsung_i2s_dai_probe(struct snd_soc_dai *dai)
 {
 	struct i2s_dai *i2s = to_info(dai);
 	struct i2s_dai *other = i2s->pri_dai ? : i2s->sec_dai;
-	struct platform_device *pdev = i2s->pri_dai ?
-				       i2s->pri_dai->pdev : i2s->pdev;
-	struct s3c_audio_pdata *i2s_pdata = pdev->dev.platform_data;
 	int ret;
 
 	if (other && other->clk) /* If this is second dai probe */
@@ -1365,7 +1402,7 @@ static const struct snd_soc_dai_ops samsung_i2s_dai_ops = {
 	.delay = i2s_delay,
 };
 
-#define SAMSUNG_I2S_RATES	SNDRV_PCM_RATE_8000_96000
+#define SAMSUNG_I2S_RATES	SNDRV_PCM_RATE_8000_192000
 
 #define SAMSUNG_I2S_FMTS	(SNDRV_PCM_FMTBIT_S8 | \
 					SNDRV_PCM_FMTBIT_S16_LE | \

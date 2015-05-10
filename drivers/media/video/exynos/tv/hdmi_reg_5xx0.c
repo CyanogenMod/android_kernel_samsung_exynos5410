@@ -2672,6 +2672,8 @@ void hdmi_reg_infoframe(struct hdmi_device *hdev,
 		}
 		/* AUI_BYTE(3)[7:0] : Should Be Zero */
 		hdmi_writeb(hdev, HDMI_AUI_BYTE(3), 0x00);
+		hdmi_writeb(hdev, HDMI_AUI_BYTE(2), 0x00);	/*shoul be zero for CTS*/
+#if 0
 		/* AUI_BYTE(2)[4:2] : Sampling Frequency */
 		if (hdev->sample_rate == 32000)
 			hdmi_writeb(hdev, HDMI_AUI_BYTE(2), HDMI_AUI_DATA_SF_32);
@@ -2688,6 +2690,7 @@ void hdmi_reg_infoframe(struct hdmi_device *hdev,
 			hdmi_writeb(hdev, HDMI_AUI_BYTE(2), HDMI_AUI_DATA_SS_20BIT);
 		else
 			hdmi_writeb(hdev, HDMI_AUI_BYTE(2), HDMI_AUI_DATA_SS_24BIT);
+#endif
 		chksum = hdmi_chksum(hdev, HDMI_AUI_BYTE(1), infoframe->len, hdr_sum);
 		dev_dbg(dev, "AUI checksum = 0x%x\n", chksum);
 		hdmi_writeb(hdev, HDMI_AUI_CHECK_SUM, chksum);
@@ -2983,7 +2986,7 @@ void hdmi_reg_set_int_hpd(struct hdmi_device *hdev)
 
 	hdmi_write(hdev, HDMI_HPD_CTRL, 0x1);
 	hdmi_write(hdev, HDMI_HPD_TH_(0), 0xff);
-	hdmi_write(hdev, HDMI_HPD_TH_(1), 0x0);
+	hdmi_write(hdev, HDMI_HPD_TH_(1), 0x14);
 	hdmi_write(hdev, HDMI_HPD_TH_(2), 0x0);
 	hdmi_write(hdev, HDMI_HPD_TH_(3), 0x0);
 }

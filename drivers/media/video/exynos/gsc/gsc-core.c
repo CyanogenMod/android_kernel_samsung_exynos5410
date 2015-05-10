@@ -467,12 +467,13 @@ int gsc_try_fmt_mplane(struct gsc_ctx *ctx, struct v4l2_format *f)
 
 	if (ctx->gsc_ctrls.csc_eq_mode->val)
 		ctx->gsc_ctrls.csc_eq->val =
-			(pix_mp->width >= 1280) ? 1 : 0;
-	if (ctx->gsc_ctrls.csc_eq->val) /* HD */
+		(pix_mp->width >= 1280) ?
+		V4L2_COLORSPACE_REC709 : V4L2_COLORSPACE_SMPTE170M;
+
+	if (is_csc_eq_709) /* HD */
 		pix_mp->colorspace = V4L2_COLORSPACE_REC709;
 	else	/* SD */
 		pix_mp->colorspace = V4L2_COLORSPACE_SMPTE170M;
-
 
 	for (i = 0; i < pix_mp->num_planes; ++i) {
 		int bpl = (pix_mp->width * fmt->depth[i]) >> 3;
@@ -975,8 +976,8 @@ static const struct v4l2_ctrl_config gsc_custom_ctrl[] = {
 		.name = "Set CSC equation",
 		.type = V4L2_CTRL_TYPE_INTEGER,
 		.flags = V4L2_CTRL_FLAG_SLIDER,
-		.max = 8,
 		.step = 1,
+		.max = V4L2_COLORSPACE_SRGB,
 		.def = V4L2_COLORSPACE_REC709,
 	}, {
 		.ops = &gsc_ctrl_ops,
@@ -1346,6 +1347,32 @@ int gsc_set_protected_content(struct gsc_dev *gsc, bool enable)
 	return 0;
 }
 
+static void gsc_dump_registers(struct gsc_dev *gsc)
+{
+	pr_err("dumping registers\n");
+	print_hex_dump(KERN_ERR, "", DUMP_PREFIX_ADDRESS, 32, 4, gsc->regs,
+			0x0280, false);
+	pr_err("End of GSC_SFR DUMP\n");
+}
+
+int gsc_sysmmu_fault_handler(struct device *dev, const char *mmuname,
+		enum exynos_sysmmu_inttype itype, unsigned long pgtable_base,
+		unsigned long fault_addr)
+{
+	struct platform_device *pdev = to_platform_device(dev);
+	struct gsc_dev *gsc = platform_get_drvdata(pdev);
+
+	pr_err("FIMD1 PAGE FAULT occurred at 0x%lx (Page table base: 0x%lx)\n",
+			fault_addr, pgtable_base);
+
+	gsc_dump_registers(gsc);
+
+	pr_err("Generating Kernel OOPS... because it is unrecoverable.\n");
+
+	BUG();
+
+	return 0;
+}
 static int gsc_runtime_suspend(struct device *dev)
 {
 	struct platform_device *pdev = to_platform_device(dev);
@@ -1532,6 +1559,9 @@ static int gsc_probe(struct platform_device *pdev)
 		ret = PTR_ERR(gsc->alloc_ctx);
 		goto err_irq;
 	}
+
+	exynos_sysmmu_set_fault_handler(&pdev->dev,
+			(sysmmu_fault_handler_t)gsc_sysmmu_fault_handler);
 
 	gsc->vb2->resume(gsc->alloc_ctx);
 

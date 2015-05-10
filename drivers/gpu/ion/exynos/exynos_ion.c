@@ -479,8 +479,10 @@ static struct sg_table *ion_exynos_contig_heap_map_dma(struct ion_heap *heap,
 	if (!table)
 		return ERR_PTR(-ENOMEM);
 	ret = sg_alloc_table(table, 1, GFP_KERNEL);
-	if (ret)
+	if (ret) {
+		kfree(table);
 		return ERR_PTR(ret);
+	}
 	sg_set_page(table->sgl, phys_to_page(buffer->priv_phys), buffer->size,
 		offset_in_page(buffer->priv_phys));
 	return table;
@@ -491,6 +493,7 @@ static void ion_exynos_contig_heap_unmap_dma(struct ion_heap *heap,
 {
 	if (buffer->sg_table)
 		sg_free_table(buffer->sg_table);
+	kfree(buffer->sg_table);
 }
 
 static int ion_exynos_contig_heap_map_user(struct ion_heap *heap,

@@ -462,8 +462,10 @@ int wait_dev_pwr_stat(const char *name, enum pwr_stat status)
 
 	if (spin < DEV_POWER_WAIT_SPIN)
 		pr_info(" done\n");
-	else
+	else {
 		subsystem_restart(EXTERNAL_MODEM);
+		return -ETIMEDOUT;
+	}
 	return 0;
 }
 
@@ -501,13 +503,16 @@ int set_hsic_lpa_states(int states)
 {
 	/* if modem need to check survive, get status in variable */
 	int val = 1;
+	int ret = 0;
 
 	/* set state for LPA enter */
 	if (val) {
 		switch (states) {
 		case STATE_HSIC_LPA_ENTER:
 			set_host_stat("mdm_hsic_pm0", POWER_OFF);
-			wait_dev_pwr_stat("mdm_hsic_pm0", POWER_OFF);
+			ret = wait_dev_pwr_stat("mdm_hsic_pm0", POWER_OFF);
+			if (ret)
+				return ret;
 			pr_info("set hsic lpa enter\n");
 			break;
 		case STATE_HSIC_LPA_WAKE:
@@ -548,7 +553,7 @@ bool mdm_check_main_connect(const char *name)
 
 	print_pm_dev_info(pm_data);
 
-	if (pm_data->intf_cnt)
+	if (pm_data->intf_cnt == 3)
 		return true;
 	else
 		return false;
@@ -604,6 +609,19 @@ int set_qmicm_mode(const char *name)
 	pr_info("%s: set QMICM mode\n", __func__);
 
 	return 0;
+}
+
+int get_qmicm_mode(const char *name)
+{
+	/* find pm device from list by name */
+	struct mdm_hsic_pm_data *pm_data = get_pm_data_by_dev_name(name);
+
+	if (!pm_data) {
+		pr_err("%s:no pm device(%s) exist\n", __func__, name);
+		return -ENODEV;
+	}
+
+	return pm_data->qmicm_mode;
 }
 
 void unregister_udev_from_pm_dev(const char *name, struct usb_device *udev)

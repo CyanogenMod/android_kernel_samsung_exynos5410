@@ -21,7 +21,7 @@
  * software in any way with any other Broadcom software provided under a license
  * other than the GPL, without Broadcom's express prior written consent.
  *
- * $Id: linux_osl.h 388661 2013-03-04 05:50:45Z $
+ * $Id: linux_osl.h 411129 2013-07-05 01:24:07Z $
  */
 
 #ifndef _linux_osl_h_
@@ -66,6 +66,9 @@ extern void osl_assert(const char *exp, const char *file, int line);
 
 #define	OSL_DELAY(usec)		osl_delay(usec)
 extern void osl_delay(uint usec);
+
+#define OSL_SLEEP(ms)			osl_sleep(ms)
+extern void osl_sleep(uint ms);
 
 #define	OSL_PCMCIA_READ_ATTR(osh, offset, buf, size) \
 	osl_pcmcia_read_attr((osh), (offset), (buf), (size))
@@ -267,7 +270,7 @@ extern int osl_error(int bcmerror);
 #define	PKTLEN(osh, skb)		(((struct sk_buff*)(skb))->len)
 #define PKTHEADROOM(osh, skb)		(PKTDATA(osh, skb)-(((struct sk_buff*)(skb))->head))
 #define PKTTAILROOM(osh, skb)		skb_tailroom((struct sk_buff*)(skb))
-#define PKTPADTAILROOM(osh, skb, padlen)		skb_pad((struct sk_buff*)(skb), (padlen))
+#define PKTPADTAILROOM(osh, skb, padlen)		osh_pktpadtailroom((osh), (skb), (padlen))
 #define	PKTNEXT(osh, skb)		(((struct sk_buff*)(skb))->next)
 #define	PKTSETNEXT(osh, skb, x)		(((struct sk_buff*)(skb))->next = (struct sk_buff*)(x))
 #define	PKTSETLEN(osh, skb, len)	__skb_trim((struct sk_buff*)(skb), (len))
@@ -388,6 +391,7 @@ typedef struct ctf_mark {
 extern void osl_pktfree(osl_t *osh, void *skb, bool send);
 extern void *osl_pktget_static(osl_t *osh, uint len);
 extern void osl_pktfree_static(osl_t *osh, void *skb, bool send);
+extern int osh_pktpadtailroom(osl_t *osh, struct sk_buff* skb, int pad);
 
 extern void *osl_pkt_frmnative(osl_t *osh, void *skb);
 extern void *osl_pktget(osl_t *osh, uint len);

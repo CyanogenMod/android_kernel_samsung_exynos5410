@@ -10,6 +10,7 @@
  * published by the Free Software Foundation.
  */
 
+#include <linux/device.h>
 #include <linux/module.h>
 
 #include <linux/mfd/arizona/core.h>
@@ -57,13 +58,15 @@ static const struct reg_default wm5102_reva_patch[] = {
 };
 
 static const struct reg_default wm5102_revb_patch[] = {
+	{ 0x19, 0x0001 },
 	{ 0x80, 0x0003 },
 	{ 0x081, 0xE022 },
 	{ 0x410, 0x6080 },
 	{ 0x418, 0xa080 },
 	{ 0x420, 0xa080 },
 	{ 0x428, 0xe000 },
-	{ 0x443, 0xDC1A },
+	{ 0x442, 0x3F0A },
+	{ 0x443, 0xDC1F },
 	{ 0x4B0, 0x0066 },
 	{ 0x458, 0x000b },
 	{ 0x212, 0x0000 },
@@ -76,16 +79,34 @@ static const struct reg_default wm5102_revb_patch[] = {
 /* We use a function so we can use ARRAY_SIZE() */
 int wm5102_patch(struct arizona *arizona)
 {
+	const struct reg_default *wm5102_patch;
+	int ret = 0;
+	int i, patch_size;
+
 	switch (arizona->rev) {
 	case 0:
-		return regmap_register_patch(arizona->regmap,
-					     wm5102_reva_patch,
-					     ARRAY_SIZE(wm5102_reva_patch));
+		wm5102_patch = wm5102_reva_patch;
+		patch_size = ARRAY_SIZE(wm5102_reva_patch);
 	default:
-		return regmap_register_patch(arizona->regmap,
-					     wm5102_revb_patch,
-					     ARRAY_SIZE(wm5102_revb_patch));
+		wm5102_patch = wm5102_revb_patch;
+		patch_size = ARRAY_SIZE(wm5102_revb_patch);
 	}
+
+	regcache_cache_bypass(arizona->regmap, true);
+
+	for (i = 0; i < patch_size; i++) {
+		ret = regmap_write(arizona->regmap, wm5102_patch[i].reg,
+				   wm5102_patch[i].def);
+		if (ret != 0) {
+			dev_err(arizona->dev, "Failed to write %x = %x: %d\n",
+				wm5102_patch[i].reg, wm5102_patch[i].def, ret);
+			goto out;
+		}
+	}
+
+out:
+	regcache_cache_bypass(arizona->regmap, false);
+	return ret;
 }
 
 static const struct regmap_irq wm5102_aod_irqs[ARIZONA_NUM_IRQ] = {
@@ -402,6 +423,9 @@ static const struct reg_default wm5102_reg_default[] = {
 	{ 0x00000435, 0x0180 },   /* R1077  - DAC Digital Volume 5R */ 
 	{ 0x00000436, 0x0081 },   /* R1078  - DAC Volume Limit 5R */
 	{ 0x00000437, 0x0200 },   /* R1079  - Noise Gate Select 5R */
+	{ 0x00000440, 0x8FFF },   /* R1088  - DRE Enable */
+	{ 0x00000442, 0x3F0A },   /* R1090  - DRE Control 2 */
+	{ 0x00000443, 0xDC1F },   /* R1090  - DRE Control 3 */
 	{ 0x00000450, 0x0000 },   /* R1104  - DAC AEC Control 1 */ 
 	{ 0x00000458, 0x0001 },   /* R1112  - Noise Gate Control */ 
 	{ 0x00000490, 0x0069 },   /* R1168  - PDM SPK1 CTRL 1 */ 
@@ -1174,6 +1198,9 @@ static bool wm5102_readable_register(struct device *dev, unsigned int reg)
 	case ARIZONA_DAC_DIGITAL_VOLUME_5R:
 	case ARIZONA_DAC_VOLUME_LIMIT_5R:
 	case ARIZONA_NOISE_GATE_SELECT_5R:
+	case ARIZONA_DRE_ENABLE:
+	case ARIZONA_DRE_CONTROL_2:
+	case ARIZONA_DRE_CONTROL_3:
 	case ARIZONA_DAC_AEC_CONTROL_1:
 	case ARIZONA_NOISE_GATE_CONTROL:
 	case ARIZONA_PDM_SPK1_CTRL_1:

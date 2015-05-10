@@ -566,6 +566,12 @@ static bool sec_bat_ovp_uvlo(struct sec_battery_info *battery)
 {
 	int health;
 
+	if (battery->factory_mode || battery->pdata->check_jig_status()) {
+		dev_dbg(battery->dev, "%s: No need to check in factory mode\n",
+			__func__);
+		return false;
+	}
+
 	if (battery->health != POWER_SUPPLY_HEALTH_GOOD &&
 		battery->health != POWER_SUPPLY_HEALTH_OVERVOLTAGE &&
 		battery->health != POWER_SUPPLY_HEALTH_UNDERVOLTAGE) {
@@ -1577,7 +1583,20 @@ static void sec_bat_get_battery_info(
 	value.intval = 0;
 	psy_do_property("sec-fuelgauge", get,
 		POWER_SUPPLY_PROP_CAPACITY, value);
+#ifdef CONFIG_MACH_J_CHN_CTC
+	if (battery->status == POWER_SUPPLY_STATUS_DISCHARGING) {
+		if ((battery->capacity > 0) && (battery->capacity < 100)
+					&& (battery->capacity < value.intval))
+			pr_info("%s: SOC invalid (%d, %d)\n",	__func__,
+				battery->capacity, value.intval);
+		else
+			battery->capacity = value.intval;
+	} else {
+		battery->capacity = value.intval;
+	}
+#else
 	battery->capacity = value.intval;
+#endif
 
 	switch (battery->pdata->thermal_source) {
 	case SEC_BATTERY_THERMAL_SOURCE_FG:
@@ -2941,7 +2960,7 @@ static int __devinit sec_battery_probe(struct platform_device *pdev)
 
 	/* create work queue */
 	battery->monitor_wqueue =
-		alloc_workqueue(dev_name(&pdev->dev), WQ_FREEZABLE, 1);
+		alloc_workqueue(dev_name(&pdev->dev), WQ_UNBOUND | WQ_MEM_RECLAIM, 1);
 	if (!battery->monitor_wqueue) {
 		dev_err(battery->dev,
 			"%s: Fail to Create Workqueue\n", __func__);

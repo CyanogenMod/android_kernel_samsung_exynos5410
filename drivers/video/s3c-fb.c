@@ -853,9 +853,11 @@ static inline u32 wincon(u32 bits_per_pixel, u32 transp_length, u32 red_length)
 	return data;
 }
 
-static inline u32 blendeq(enum s3c_fb_blending blending, u8 transp_length)
+static inline u32 blendeq(enum s3c_fb_blending blending, u8 transp_length,
+	int plane_alpha)
 {
 	u8 a, b;
+	int is_plane_alpha = (plane_alpha < 255 && plane_alpha > 0) ? 1 : 0;
 
 	if (transp_length == 1 && blending == S3C_FB_BLENDING_PREMULT)
 		blending = S3C_FB_BLENDING_COVERAGE;
@@ -867,8 +869,13 @@ static inline u32 blendeq(enum s3c_fb_blending blending, u8 transp_length)
 		break;
 
 	case S3C_FB_BLENDING_PREMULT:
-		a = BLENDEQ_COEF_ONE;
-		b = BLENDEQ_COEF_ONE_MINUS_ALPHA_A;
+		if (!is_plane_alpha) {
+			a = BLENDEQ_COEF_ONE;
+			b = BLENDEQ_COEF_ONE_MINUS_ALPHA_A;
+		} else {
+			a = BLENDEQ_COEF_ALPHA0;
+			b = BLENDEQ_COEF_ONE_MINUS_ALPHA_A;
+		}
 		break;
 
 	case S3C_FB_BLENDING_COVERAGE:
@@ -1158,6 +1165,13 @@ static int s3c_fb_setcolreg(unsigned regno,
 
 	pm_runtime_put_sync(sfb->dev);
 	return 0;
+}
+
+static void s3c_fb_inactivate_window(struct s3c_fb *sfb, unsigned int index)
+{
+	u32 wincon = readl(sfb->regs + WINCON(index));
+	wincon &= ~(WINCONx_ENWIN);
+	writel(wincon, sfb->regs + WINCON(index));
 }
 
 static void s3c_fb_activate_window(struct s3c_fb *sfb, unsigned int index)
@@ -1664,8 +1678,7 @@ static unsigned int s3c_fb_map_ion_handle(struct s3c_fb *sfb,
 	dma->dma_addr = iovmm_map(&s5p_device_fimd0.dev, dma->sg_table->sgl, 0,
 			dma->dma_buf->size);
 #else
-	dma->dma_addr = iovmm_map(&s5p_device_fimd1.dev, dma->sg_table->sgl, 0,
-			dma->dma_buf->size);
+	dma->dma_addr = ion_dma_address(ion_handle, sfb->dev);
 #endif
 	if (!dma->dma_addr || IS_ERR_VALUE(dma->dma_addr)) {
 		dev_err(sfb->dev, "iovmm_map() failed: %d\n", dma->dma_addr);
@@ -1703,7 +1716,9 @@ static void s3c_fb_free_dma_buf(struct s3c_fb *sfb,
 		sync_fence_put(dma->fence);
 
 #if !defined(CONFIG_FB_EXYNOS_FIMD_SYSMMU_DISABLE)
+#ifdef CONFIG_ARCH_EXYNOS4
 	iovmm_unmap(sfb->dev, dma->dma_addr);
+#endif
 	dma_buf_unmap_attachment(dma->attachment, dma->sg_table,
 			DMA_BIDIRECTIONAL);
 #endif
@@ -2044,7 +2059,10 @@ static int s3c_fb_set_win_buffer(struct s3c_fb *sfb, struct s3c_fb_win *win,
 	regs->vidosd_b[win_no] = vidosd_b(win_config->x, win_config->y,
 			win_config->w, win_config->h);
 
-	if (win->fbinfo->var.transp.length == 1 &&
+	if ((win_config->plane_alpha > 0) && (win_config->plane_alpha < 0xFF)) {
+		alpha0 = win_config->plane_alpha;
+		alpha1 = 0;
+	} else if (win->fbinfo->var.transp.length == 1 &&
 			win_config->blending == S3C_FB_BLENDING_NONE) {
 		alpha0 = 0xff;
 		alpha1 = 0xff;
@@ -2074,9 +2092,20 @@ static int s3c_fb_set_win_buffer(struct s3c_fb *sfb, struct s3c_fb_win *win,
 	regs->wincon[win_no] = wincon(win->fbinfo->var.bits_per_pixel,
 			win->fbinfo->var.transp.length,
 			win->fbinfo->var.red.length);
-	if (win_no)
+	if (win_no) {
+		if ((win_config->plane_alpha > 0) && (win_config->plane_alpha < 0xFF)) {
+			if (win->fbinfo->var.transp.length) {
+				if (win_config->blending != S3C_FB_BLENDING_NONE)
+					regs->wincon[win_no] |= WINCON1_ALPHA_MUL;
+			} else {
+				regs->wincon[win_no] &= (~WINCON1_ALPHA_SEL);
+				if (win_config->blending == S3C_FB_BLENDING_PREMULT)
+					win_config->blending = S3C_FB_BLENDING_COVERAGE;
+			}
+		}
 		regs->blendeq[win_no - 1] = blendeq(win_config->blending,
-				win->fbinfo->var.transp.length);
+				win->fbinfo->var.transp.length, win_config->plane_alpha);
+	}
 
 	return 0;
 
@@ -2204,14 +2233,8 @@ static int s3c_fb_set_win_config(struct s3c_fb *sfb,
 
 		list_add_tail(&regs->list, &sfb->update_regs_list);
 		mutex_unlock(&sfb->update_regs_list_lock);
-		if (!queue_kthread_work(&sfb->update_regs_worker,
-					&sfb->update_regs_work)) {
-			flush_kthread_work(&sfb->update_regs_work);
-			dev_err(sfb->dev, "%s info : win_config retry.\n", __func__);
-			if (!queue_kthread_work(&sfb->update_regs_worker,
-						&sfb->update_regs_work))
-				BUG();
-		}
+		queue_kthread_work(&sfb->update_regs_worker,
+					&sfb->update_regs_work);
 	}
 
 err:
@@ -2285,19 +2308,6 @@ static void s3c_fb_update_regs(struct s3c_fb *sfb, struct s3c_reg_data *regs)
 	pm_runtime_get_sync(sfb->dev);
 
 	for (i = 0; i < sfb->variant.nr_windows; i++) {
-		u32 new_start = regs->vidw_buf_start[i];
-		u32 shadow_start = readl(sfb->regs +
-				SHD_VIDW_BUF_START(i));
-
-#if !defined(CONFIG_FB_EXYNOS_FIMD_SYSMMU_DISABLE)
-		if (new_start && (new_start == shadow_start)) {
-			pr_err("%s: 0x%08x is busy\n", __func__, new_start);
-			pm_runtime_put_sync(sfb->dev);
-			sw_sync_timeline_inc(sfb->timeline, 1);
-			return;
-		}
-#endif
-
 		old_dma_bufs[i] = sfb->windows[i]->dma_buf_data;
 
 		if (regs->dma_buf_data[i].fence)
@@ -3733,6 +3743,11 @@ static int __devinit s3c_fb_probe(struct platform_device *pdev)
 	platid = platform_get_device_id(pdev);
 	fbdrv = (struct s3c_fb_driverdata *)platid->driver_data;
 
+	if (ion_register_special_device(ion_exynos, dev)) {
+		dev_err(dev, "ION special device is already registered\n");
+		return -EBUSY;
+	}
+
 	if (fbdrv->variant.nr_windows > S3C_FB_MAX_WIN) {
 		dev_err(dev, "too many windows, cannot attach\n");
 		return -EINVAL;
@@ -4021,9 +4036,7 @@ static int __devinit s3c_fb_probe(struct platform_device *pdev)
 	/* MDNIE setting */
 	s3c_mdnie_hw_init();
 	s3c_mdnie_set_size();
-#ifdef CONFIG_MACH_V1
-	mdnie_update(g_mdnie, 1);
-#endif
+
 	/* FIMD , IELCD Enable video out */
 	s3c_ielcd_display_on();
 	s3c_fimd1_display_on();
@@ -4066,6 +4079,8 @@ static int __devinit s3c_fb_probe(struct platform_device *pdev)
 	}
 #endif
 #endif
+
+	s3c_fb_inactivate_window(sfb, default_win);
 
 	sfb->output_on = true;
 	s3c_fb_set_par(sfb->windows[default_win]->fbinfo);
@@ -4393,7 +4408,6 @@ static int s3c_fb_enable(struct s3c_fb *sfb)
 	s3c_ielcd_setup();
 	/* MDNIE setting */
 	s3c_mdnie_set_size();
-	mdnie_update(g_mdnie, 1);
 
 	/* FIMD , IELCD Enable video out */
 	s3c_ielcd_display_on();
@@ -4581,7 +4595,6 @@ static int s3c_fb_resume(struct device *dev)
 	s3c_ielcd_setup();
 	/* MDNIE setting */
 	s3c_mdnie_set_size();
-	mdnie_update(g_mdnie, 1);
 
 	/* FIMD , IELCD Enable video out */
 	s3c_ielcd_display_on();
