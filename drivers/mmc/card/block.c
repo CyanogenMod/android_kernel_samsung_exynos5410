@@ -35,6 +35,7 @@
 #include <linux/capability.h>
 #include <linux/compat.h>
 #include <linux/blktrace_api.h>
+#include <linux/sysfs.h>
 
 #include <linux/mmc/ioctl.h>
 #include <linux/mmc/card.h>
@@ -1329,7 +1330,7 @@ static void mmc_blk_rw_rq_prep(struct mmc_queue_req *mqrq,
 	brq->data.sg = mqrq->sg;
 	brq->data.sg_len = mmc_queue_map_sg(mq, mqrq);
 
-#if defined(CONFIG_MACH_JA_KOR_SKT) || defined(CONFIG_MACH_JA_KOR_KT) || defined(CONFIG_MACH_JA_KOR_LGT) || defined(CONFIG_MACH_J_CHN_CU) || defined(CONFIG_MACH_J_CHN_CTC)
+#if defined(CONFIG_MACH_JA_KOR_SKT) || defined(CONFIG_MACH_JA_KOR_KT) || defined(CONFIG_MACH_JA_KOR_LGT) || defined(CONFIG_MACH_J_CHN_CU)
 	brq->cmd.retries = 3;
 #endif
 
@@ -2423,11 +2424,25 @@ static inline void mmc_blk_bkops_sysfs_init(struct mmc_card *card)
 	card->bkops_attr.store = bkops_mode_store;
 	sysfs_attr_init(&card->bkops_attr.attr);
 	card->bkops_attr.attr.name = "bkops_en";
-	card->bkops_attr.attr.mode = S_IRUGO | S_IWUSR;
+	card->bkops_attr.attr.mode = S_IRUGO | S_IWUSR | S_IWGRP;
 
-	if (device_create_file((disk_to_dev(md->disk)), &card->bkops_attr))
+	if (device_create_file((disk_to_dev(md->disk)), &card->bkops_attr)) {
 		pr_err("%s: Failed to create bkops_en sysfs entry\n",
 				mmc_hostname(card->host));
+#if defined(CONFIG_MMC_BKOPS_NODE_UID) || defined(CONFIG_MMC_BKOPS_NODE_GID)
+	} else {
+		int rc;
+		struct device * dev;
+
+		dev = disk_to_dev(md->disk);
+		rc = sysfs_chown_file(&dev->kobj, &card->bkops_attr.attr,
+				      CONFIG_MMC_BKOPS_NODE_UID,
+				      CONFIG_MMC_BKOPS_NODE_GID);
+		if (rc)
+			pr_err("%s: Failed to change mode of sysfs entry\n",
+					mmc_hostname(card->host));
+#endif
+	}
 }
 #else
 static inline void mmc_blk_bkops_sysfs_init(struct mmc_card *card)

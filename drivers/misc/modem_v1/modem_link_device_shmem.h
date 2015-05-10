@@ -166,6 +166,7 @@ struct shmem_link_device {
 #if defined(CONFIG_FB)
 	/* for PM based on "frame buffer" notifier */
 	struct notifier_block fb_nb;
+	int fb_blank;
 #elif defined(CONFIG_HAS_EARLYSUSPEND)
 	/* for PM based on "early_suspend" mechanism */
 	struct early_suspend early_suspend;

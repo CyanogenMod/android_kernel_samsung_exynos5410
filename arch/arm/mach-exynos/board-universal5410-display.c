@@ -373,8 +373,8 @@ static struct s3c_fb_pd_win universal5410_fb_win0 = {
 	},
 	.virtual_x		= 1088,
 	.virtual_y		= 1920 * 2,
-	.width			= 59,
-	.height			= 104,
+	.width			= 71,
+	.height			= 114,
 	.max_bpp		= 32,
 	.default_bpp		= 24,
 };
@@ -392,8 +392,8 @@ static struct s3c_fb_pd_win universal5410_fb_win1 = {
 	},
 	.virtual_x		= 1088,
 	.virtual_y		= 1920 * 2,
-	.width			= 59,
-	.height			= 104,
+	.width			= 71,
+	.height			= 114,
 	.max_bpp		= 32,
 	.default_bpp		= 24,
 };
@@ -411,8 +411,8 @@ static struct s3c_fb_pd_win universal5410_fb_win2 = {
 	},
 	.virtual_x		= 1080,
 	.virtual_y		= 1920 * 2,
-	.width			= 59,
-	.height			= 104,
+	.width			= 71,
+	.height			= 114,
 	.max_bpp		= 32,
 	.default_bpp		= 24,
 };
@@ -430,8 +430,8 @@ static struct s3c_fb_pd_win universal5410_fb_win3 = {
 	},
 	.virtual_x		= 1080,
 	.virtual_y		= 1920 * 2,
-	.width			= 59,
-	.height			= 104,
+	.width			= 71,
+	.height			= 114,
 	.max_bpp		= 32,
 	.default_bpp		= 24,
 };
@@ -449,8 +449,8 @@ static struct s3c_fb_pd_win universal5410_fb_win4 = {
 	},
 	.virtual_x		= 1080,
 	.virtual_y		= 1920 * 2,
-	.width			= 59,
-	.height			= 104,
+	.width			= 71,
+	.height			= 114,
 	.max_bpp		= 32,
 	.default_bpp		= 24,
 };
@@ -681,7 +681,6 @@ static struct s5p_platform_mipi_dsim dsim_platform_data = {
 	.dsim_lcd_config	= &dsim_lcd_info,
 
 	.mipi_power		= mipi_power_control,
-	.part_reset		= s5p_dsim_part_reset,
 	.init_d_phy		= s5p_dsim_init_d_phy,
 	.get_fb_frame_done	= NULL,
 	.trigger		= NULL,
@@ -751,6 +750,9 @@ void __init exynos5_universal5410_display_init(void)
 		} else if (lcd_id == 7) {
 			dsim_info.dsim_ddi_pd = &s6e8fa0_I_mipi_lcd_driver;
 			pr_err("panel I\n");
+		} else if (lcd_id == 8) {
+			dsim_info.dsim_ddi_pd = &s6e8fa0_J_mipi_lcd_driver;
+			pr_err("panel J\n");
 		} else {
 			dsim_info.dsim_ddi_pd = &s6e8fa0_I_mipi_lcd_driver;
 			pr_err("panel select fail\n");

@@ -30,6 +30,19 @@
 #include <linux/pm_qos.h>
 #define TOUCH_BOOSTER_OFF_TIME	300
 #define TOUCH_BOOSTER_CHG_TIME	200
+
+#define TOUCH_BOOSTER_CPU_FRQ_1	600000
+#define TOUCH_BOOSTER_MIF_FRQ_1	800000
+#define TOUCH_BOOSTER_INT_FRQ_1	200000
+
+#define TOUCH_BOOSTER_MIF_FRQ_2	400000
+
+#define TOUCH_BOOSTER_CPU_FRQ_9	1600000
+#define TOUCH_BOOSTER_CPU_FRQ_9_T	1200000
+#define TOUCH_BOOSTER_MIF_FRQ_9	800000
+#define TOUCH_BOOSTER_INT_FRQ_9	400000
+#define TOUCH_BOOSTER_OFF_TIME_9	1000
+#define TOUCH_BOOSTER_CHG_TIME_9	500
 #endif
 
 #define SECURE_TSP
@@ -48,6 +61,37 @@
 
 #ifdef USE_OPEN_DWORK
 #define TOUCH_OPEN_DWORK_TIME 10
+#endif
+
+/* TSP_PATTERN_TRACKING : This is protection code for ghost touch
+ * such as stucked single postion and frequently pressed and released
+ * touch into specific area.
+ * Almost these kind of ghost touch can be treated into firmware level.
+ * But some hardware or some regional project might be needed this feature.
+ * Basically this define is not recommeded.
+ */
+#if defined(CONFIG_TARGET_LOCALE_KOR)
+/* To recovery the device from ghost touch  */
+#define TSP_PATTERN_TRACKING_METHOD
+#define PATTERN_TRACKING_FOR_FULLSCREEN
+#endif
+
+#if defined(TSP_PATTERN_TRACKING_METHOD)
+#define TSP_PT_MAX_GHOSTCHECK_FINGER	10
+#define TSP_PT_MAX_GHOSTTOUCH_COUNT	5
+#define TSP_PT_MAX_COUNT_TOUCHSYSREBOOT	4
+#define TSP_PT_MAX_GHOSTTOUCH_BY_PATTERNTRACKING	3
+#define TSP_PT_PATTERN_TRACKING_DISTANCE	4
+#define TSP_PT_REBOOT_PENDING_TIME	50
+#define TSP_PT_MOVE_COUNT_TH	100
+
+/* Each project has different edge config,
+ * so check this value before applying pattern tracking.
+ */
+#define TSP_PT_MIN_X_EDGE	17
+#define TSP_PT_MAX_X_EDGE	1060
+#define TSP_PT_MIN_Y_EDGE	17
+#define TSP_PT_MAX_Y_EDGE	1900
 #endif
 
 #define SYNAPTICS_HW_RESET_TIME	80
@@ -197,6 +241,16 @@ struct synaptics_finger {
 	unsigned short mcount;
 };
 
+#if defined(TSP_PATTERN_TRACKING_METHOD)
+struct pattern_tracking {
+	int tcount_finger[TSP_PT_MAX_GHOSTCHECK_FINGER];
+	int touchbx[TSP_PT_MAX_GHOSTCHECK_FINGER];
+	int touchby[TSP_PT_MAX_GHOSTCHECK_FINGER];
+	int ghosttouchcount;
+	bool is_working;
+};
+#endif
+
 /*
  * struct synaptics_rmi4_data - rmi4 device instance data
  * @i2c_client: pointer to associated i2c client
@@ -281,6 +335,9 @@ struct synaptics_rmi4_data {
 	int panel_revision;			/* Octa panel revision */
 	bool doing_reflash;
 	int rebootcount;
+#ifdef TSP_PATTERN_TRACKING_METHOD
+	struct pattern_tracking pattern_data;
+#endif
 
 #ifdef TSP_BOOSTER
 	bool dvfs_lock_status;
@@ -301,11 +358,19 @@ struct synaptics_rmi4_data {
 	bool fast_glove_state;
 	bool touchkey_glove_mode_status;
 #endif
+	unsigned char ddi_type;
+
+#ifdef SECURE_TSP
+	int secure_mode_status;
+#endif
+
 #ifdef USE_OPEN_DWORK
 	struct delayed_work open_work;
 #endif
 	struct delayed_work rezero_work;
-
+#ifdef TSP_PATTERN_TRACKING_METHOD
+	struct delayed_work reboot_work;
+#endif
 	struct mutex rmi4_device_mutex;
 
 	int (*i2c_read)(struct synaptics_rmi4_data *pdata, unsigned short addr,
@@ -323,6 +388,14 @@ enum BOOST_LEVEL {
 	TSP_BOOSTER_DISABLE = 0,
 	TSP_BOOSTER_LEVEL1,
 	TSP_BOOSTER_LEVEL2,
+	TSP_BOOSTER_LEVEL9 = 9,
+	TSP_BOOSTER_LEVEL_MAX,
+};
+
+enum BOOST_MODE {
+	TSP_BOOSTER_OFF = 0,
+	TSP_BOOSTER_ON,
+	TSP_BOOSTER_FORCE_OFF,
 };
 #endif
 
@@ -341,10 +414,6 @@ struct synaptics_rmi4_exp_fn_ptr {
 	int (*enable)(struct synaptics_rmi4_data *rmi4_data, bool enable);
 };
 
-#ifdef SECURE_TSP
-static int secure_mode_status; /* global define for debugging */
-#endif
-
 int synaptics_rmi4_new_function(enum exp_fn fn_type,
 		int (*func_init)(struct synaptics_rmi4_data *rmi4_data),
 		void (*func_remove)(struct synaptics_rmi4_data *rmi4_data),
@@ -361,6 +430,9 @@ int synaptics_rmi4_fw_update_on_probe(struct synaptics_rmi4_data *rmi4_data);
 int synaptics_rmi4_proximity_enables(unsigned char enables);
 int synaptics_rmi4_glove_mode_enables(struct synaptics_rmi4_data *rmi4_data);
 int synaptics_proximity_no_sleep_set(bool enables);
+void synaptics_rmi4_release_all_finger(struct synaptics_rmi4_data *rmi4_data);
+
+int synaptics_rmi4_force_calibration(void);
 
 extern struct class *sec_class;
 

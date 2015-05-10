@@ -728,6 +728,7 @@ bool tdmb_ant_det_irq_set(bool set)
 	DPRINTK("%s : set(%d) ant_irq(%d)\n", __func__, set, ant_irq_ret);
 
 	if (set) {
+		gpio_cfg.tdmb_ant_det_en(true);
 		if (ant_irq_ret < 0) {
 			ant_prev_status =
 				gpio_get_value_cansleep(gpio_cfg.gpio_ant_det);
@@ -748,6 +749,7 @@ bool tdmb_ant_det_irq_set(bool set)
 			}
 		}
 	} else {
+		gpio_cfg.tdmb_ant_det_en(false);
 		if(ant_irq_ret >= 0) {
 			disable_irq_wake(gpio_cfg.irq_ant_det);
 			free_irq(gpio_cfg.irq_ant_det, NULL);

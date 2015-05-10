@@ -400,6 +400,7 @@ static ssize_t write(struct file *file, const char *buf, size_t count,
 			** (Should never happen).
 			*/
 			DbgOut((KERN_EMERG "tspdrv: invalid buffer index.\n"));
+			return 0;
 		}
 
 		/* Check bit depth */
@@ -420,6 +421,7 @@ static ssize_t write(struct file *file, const char *buf, size_t count,
 			** (Should never happen).
 			*/
 			DbgOut((KERN_EMERG "tspdrv: invalid data size.\n"));
+			return 0;
 		}
 
 		/* Check actuator index */
@@ -519,6 +521,7 @@ static long unlocked_ioctl(struct file *file, unsigned int cmd,
 		break;
 
 	case TSPDRV_MAGIC_NUMBER:
+	case TSPDRV_SET_MAGIC_NUMBER:
 		file->private_data = (void *)TSPDRV_MAGIC_NUMBER;
 		break;
 

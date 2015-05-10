@@ -61,6 +61,7 @@ struct s3c_fb_win_config {
 		S3C_FB_WIN_STATE_DISABLED = 0,
 		S3C_FB_WIN_STATE_COLOR,
 		S3C_FB_WIN_STATE_BUFFER,
+		S3C_FB_WIN_STATE_OTF,
 	} state;
 
 	union {
@@ -72,6 +73,7 @@ struct s3c_fb_win_config {
 			enum s3c_fb_pixel_format	format;
 			enum s3c_fb_blending		blending;
 			int				fence_fd;
+			int				plane_alpha;
 		};
 	};
 
