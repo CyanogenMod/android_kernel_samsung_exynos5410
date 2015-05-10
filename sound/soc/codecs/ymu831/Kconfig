@@ -7,3 +7,8 @@ config SND_SOC_YAMAHA_YMU831_DEBUG
 	bool "YAMAHA_YMU831 verbose debug messages while core driver call"
 	select SND_DEBUG
 	depends on SND_SOC_YAMAHA_YMU831
+
+config ONLY_LRGM_TYPE_HEADSET_USE
+	bool "Only LRGM type Headset support"
+	default n
+	

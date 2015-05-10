@@ -245,6 +245,8 @@ static int samsung_bookcover_input_mapping(struct hid_device *hdev,
 		/* key found */
 		case 0x32: samsung_kbd_mouse_map_key_clear(KEY_KBDILLUMTOGGLE); break;
 		case 0x64: samsung_kbd_mouse_map_key_clear(KEY_BACKSLASH); break;
+		/* Only for BR keyboard */
+		case 0x87: samsung_kbd_mouse_map_key_clear(KEY_RO); break;
 		default:
 			return 0;
 		}

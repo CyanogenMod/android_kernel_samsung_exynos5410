@@ -64,7 +64,12 @@
 
 #define MC_ASOC_DRIVER_VERSION	"1.0.6"
 
+
+#if defined(CONFIG_ONLY_LRGM_TYPE_HEADSET_USE)
+#define MC_ASOC_IMPCLASS_THRESHOLD	5 // Only LRGM(US)headset support, LRMG(EUR)headset don't support
+#else
 #define MC_ASOC_IMPCLASS_THRESHOLD	3
+#endif
 
 #define MC_ASOC_RATE	(SNDRV_PCM_RATE_8000_192000)
 #define MC_ASOC_FORMATS	(SNDRV_PCM_FMTBIT_S16_LE | \
