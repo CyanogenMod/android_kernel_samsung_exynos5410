@@ -90,6 +90,13 @@ config DHD_USE_SCHED_SCAN
 	---help---
 	  Use CFG80211 sched scan
 
+config DHD_USE_MFP_AUTH
+	bool "Use MFP authentication"
+	depends on BCMDHD && CFG80211
+	default n
+	---help---
+	  Use MFP authentication
+	  
 config BROADCOM_WIFI_RESERVED_MEM
 	bool "BROADCOM Reserved memory for wifi device"
 	depends on (BCM4330 ||BCM4343 || BCM4334 || BCM4335 || BCM4339 || BCM4354 || BCM43241)
