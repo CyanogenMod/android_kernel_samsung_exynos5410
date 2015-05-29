@@ -136,7 +136,9 @@ DHDCFLAGS += -DWL_IFACE_COMB_NUM_CHANNELS
 # To support p2p private command on kernel 3.8 or above
 DHDCFLAGS += -DWL_NEWCFG_PRIVCMD_SUPPORT
 
-
+#ifdef CONFIG_DHD_USE_MFP_AUTH
+DHDCFLAGS += -DUSE_MFP_AUTH
+#endif
 
 ##########################
 # driver type
